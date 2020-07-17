@@ -1,0 +1,55 @@
+[project]
+name="20200520_Test"
+analysis_type="RNAseq"
+run_ids=["200519_NB552003_0070_AHCHNJAFX2"]
+
+[samples]
+df_samples_path="incoming/samples.tsv"
+reverse_reads=false
+kit="QuantSeq" #fastq_processor="UMIExtractAndTrim"
+
+[alignment]
+species="Homo_sapiens"
+revision=98
+aligner="STAR"
+
+[genes.filter]
+canonical = true
+biotypes = [
+    "protein_coding","snRNA",
+    "snoRNA",
+    "miRNA",
+    "3prime_overlapping_ncRNA",
+    "processed_transcript",
+    "non_coding",
+    "scRNA",
+    "vaultRNA",
+    "scaRNA",
+    "sRNA",
+    "Mt_tRNA",
+    "misc_RNA",
+    "Mt_rRNA",
+    "macro_lncRNA",
+    "bidirectional_promoter_lncRNA",
+    "lincRNA",
+]
+cpm_threshold = 1
+
+[comparison.DESeq2Unpaired]
+filter_expressions = [
+    [["FDR", "<=", "0.05"], ["log2FC", "|>", "1"]],
+    [["FDR", "<=", "0.05"], ["log2FC", ">=", "1"]],
+    [["FDR", "<=", "0.05"], ["log2FC", "<=", "1"]],
+]
+# parameters = {}
+
+[downstream.pathway_analysis]
+
+    [downstream.pathway_analysis.ora]
+        collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
+
+    [downstream.pathway_analysis.gsea]
+        collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
+
+[reports]
+name="run_report"

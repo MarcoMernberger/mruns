@@ -1,10 +1,15 @@
 # -*- coding: utf-8 -*-
 """
-    Dummy conftest.py for mruns.
-
-    If you don't know what this is for, just leave it empty.
-    Read more about conftest.py under:
-    https://pytest.org/latest/plugins.html
+    conftest.py for mruns.
 """
+from pathlib import Path
+from mruns.base import get_analysis_from_toml
+import pytest
 
-# import pytest
+
+@pytest.fixture
+def analysis():
+    data_folder = Path(__file__).parent / "data"
+    toml_file = data_folder / "run.toml"
+    analysis = get_analysis_from_toml(toml_file)
+    return analysis
