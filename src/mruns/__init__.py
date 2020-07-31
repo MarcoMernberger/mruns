@@ -12,3 +12,4 @@ finally:
 
 
 from .base import analysis
+from .defaults import Defaults

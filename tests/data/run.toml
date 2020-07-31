@@ -1,12 +1,14 @@
 [project]
-name="20200520_Test"
+name="Test"
 analysis_type="RNAseq"
-run_ids=["200519_NB552003_0070_AHCHNJAFX2"]
+run_ids=["testrun"]
+incoming="tests/data"
 
 [samples]
-df_samples_path="incoming/samples.tsv"
+df_samples="samples.tsv"
 reverse_reads=false
 kit="QuantSeq" #fastq_processor="UMIExtractAndTrim"
+stranded=true
 
 [alignment]
 species="Homo_sapiens"

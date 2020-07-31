@@ -1,0 +1,6 @@
+a	b	comparison_name	comment
+LNCaP_photo_6gy	LNCaP_photo_ctrl	"photo vs cntrl (LNCaP)"	What effect does photon irradiation have in LNCaP cell line?
+LNCaP_ion_2gy	LNCaP_ion_ctrl	"ion vs cntrl (LNCaP)"	What effect does ion irradiation have in LNCaP cell line?
+DU145_photo_6gy	DU145_photo_ctrl	"photo vs cntrl (DU145)"	What effect does photo irradiation have in DU145 cell line?
+DU145_ion_2gy	DU145_ion_ctrl	"ion vs cntrl (DU145)"	What effect does ion irradiation have in DU145 cell line?
+LNCaP_DHT	LNCaP_ctrl	"DHT vs ctrl (LNCaP)"	What effect does androgen treatment have in LNCaP cell line?

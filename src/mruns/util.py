@@ -5,6 +5,7 @@
 
 from typing import Callable, List
 from pathlib import Path
+from pandas import DataFrame
 import tomlkit
 import numpy as np
 
@@ -90,3 +91,24 @@ def read_toml(req_file: Path):
     with req_file.open("r") as op:
         p = tomlkit.loads(op.read())
     return p
+
+
+def df_to_markdown_table(df: DataFrame) -> str:
+    """
+    Turns a DataFrame into a markdown table format string.
+
+    Parameters
+    ----------
+    df : DataFrame
+        The dataframe to convert.
+
+    Returns
+    -------
+    str
+        String representation of dataframe in markdown format.
+    """
+    ret = "|" + "|".join(list(df.columns.values)) + "|\n"
+    ret += "|" + "|".join(["-" for x in df.columns]) + "|\n"
+    for _, row in df.iterrows():
+        ret += "|" + "|".join([str(x) for x in row]) + "|\n"
+    return ret
