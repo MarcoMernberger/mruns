@@ -12,7 +12,13 @@ from mreports import NB
 from mbf_genomes import EnsemblGenome
 from mbf_externals import ExternalAlgorithm
 from pandas import DataFrame
-from .util import filter_function, read_toml, df_to_markdown_table
+from .util import (
+    filter_function,
+    read_toml,
+    df_to_markdown_table,
+    fill_incoming,
+    assert_uniqueness,
+)
 from pprint import PrettyPrinter
 from mbf_genomics.genes.anno_tag_counts import _NormalizationAnno, _FastTagCounter
 import dataclasses
@@ -116,6 +122,7 @@ class Analysis:
         """
         Cleans up after initialization.
         """
+        self.get_fastqs()
         self._verify()
         if ppg.inside_ppg():
             self.set_genome()
@@ -629,9 +636,11 @@ class Analysis:
                         report_header += f"Parameters: {parameter}\n"
         combination_df = self.combination_df()
         if combination_df is not None:
-            report_header += f"\nSet operations on comparisons\n-----------------------------\n"
+            report_header += (
+                f"\nSet operations on comparisons\n-----------------------------\n"
+            )
             report_header += pp.pformat(combination_df)
-        
+
         return report_header
 
     def summary_markdown(self) -> str:
@@ -752,16 +761,35 @@ class Analysis:
                 condition_group = row["condition_group"]
                 new_name_prefix = row["combined_name"]
                 comparisons_to_add = row["comparison_names"].split(",")
+                assert_uniqueness(comparisons_to_add)
                 if row["operation"] == "difference":
+
                     def generator(new_name, genes_to_combine):
-                        return mbf_genomics.genes.genes_from.FromDifference(new_name, genes_to_combine[0], genes_to_combine[1], sheet_name="Differences")
+                        return mbf_genomics.genes.genes_from.FromDifference(
+                            new_name,
+                            genes_to_combine[0],
+                            genes_to_combine[1:],
+                            sheet_name="Differences",
+                        )
+
                 elif row["operation"] == "intersection":
+
                     def generator(new_name, genes_to_combine):
-                        return mbf_genomics.genes.genes_from.FromIntersection(new_name, genes_to_combine, sheet_name="Intersections")
+                        return mbf_genomics.genes.genes_from.FromIntersection(
+                            new_name, genes_to_combine, sheet_name="Intersections"
+                        )
+
                 elif row["operation"] == "union":
+
                     def generator(new_name, genes_to_combine):
-                        return mbf_genomics.genes.genes_from.FromAny(new_name, genes_to_combine, sheet_name="Unions")
+                        return mbf_genomics.genes.genes_from.FromAny(
+                            new_name, genes_to_combine, sheet_name="Unions"
+                        )
+
                 yield condition_group, new_name_prefix, comparisons_to_add, generator
+
+    def get_fastqs(self):
+        fill_incoming(self.run_ids)
 
 
 def analysis(req_file: Path = Path("run.toml")) -> Analysis:
