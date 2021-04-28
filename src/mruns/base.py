@@ -34,6 +34,7 @@ import mbf_genomes
 import mbf_externals
 import mbf_align
 import mbf_genomics
+import mbf_comparisons
 
 __author__ = "Marco Mernberger"
 __copyright__ = "Copyright (c) 2020 Marco Mernberger"
@@ -127,11 +128,113 @@ class Analysis:
         if ppg.inside_ppg():
             self.set_genome()
         self.verify_samples()
+        self.comparisons_to_do = self.parse_comparisons()
 
     def set_genome(self):
         self._genome = mbf_genomes.EnsemblGenome(
             self.alignment["species"], self.alignment["revision"]
         )
+
+    def parse_single_comparisons(
+        self, comparison_group: str, method_name: str, comparison_type: str
+    ):
+        comparisons_to_do = {}
+        seen = set()
+        path = self.comparison[comparison_group][method_name]["path"]
+        df_in = pd.read_csv(path, sep="\t")
+        method, options = self.comparison_method(comparison_group, method_name)
+        for _, row in df_in.iterrows():
+            comparison_name = f"{row['comparison_name']}({method_name})"
+            if comparison_name in seen:
+                raise ValueError(
+                    "Duplicate comparison name  {comparison_name} in {path}."
+                )
+
+            comparisons_to_do[comparison_name] = {
+                "type": comparison_type,
+                "cond1": row["a"],
+                "cond2": row["b"],
+                "method": method,
+                "method_name": method_name,
+                "options": options,
+            }
+
+        return comparisons_to_do
+
+    def parse_multi_comparisons(
+        self, comparison_group: str, method_name: str, comparison_type: str
+    ):
+        df_factor_path = self.comparison[comparison_group][method_name]["path"]
+        multi_comparisons_to_do = {}
+        df_factor = pd.read_csv(df_factor_path, sep="\t")
+        method, options = self.comparison_method(comparison_group, method_name)
+        for multi_group, df_factor_group in df_factor.groupby("comparison_group"):
+            for multi_comp_name, df_comp in df_factor_group.groupby("comparison"):
+                main_factor = df_comp["main"].values[0]
+                comparison_name = f"{multi_comp_name}({method_name})"
+                assert len(df_comp["main"].unique()) == 1
+                interactions = None
+                if "interaction" in df_comp.columns:
+                    interactions = df_comp["interaction"].values[0]
+                factors = [x for x in df_comp.columns.values if ":" in x]
+                rename = {}
+                factor_reference = {}
+                other_factor = None
+                for factor_ref in factors:
+                    factor, ref = factor_ref.split(":")
+                    factor_reference[factor] = ref
+                    rename[factor_ref] = factor
+                    if factor != main_factor:
+                        other_factor = factor
+                if other_factor is None:
+                    raise ValueError("Only one factor in {df_factor_path}.")
+                df_factors = df_comp.rename(columns=rename)
+                #####
+                # for main_level in df_comp[main_factor].unique():
+                #                 if main_level == factor_reference[main_factor]:
+                #                     continue
+                #                 print("main", main_level)
+                #                 for genotype in df_comp[other_factor].unique():
+                #                     if genotype == factor_reference[other_factor]:
+                #                         continue
+                #                     print("other", genotype)
+                #                     column_prefix_effect = f"{main_level}:{factor_reference[main_factor]}({main_factor}) effect for {genotype}:{factor_reference[other_factor]}({other_factor})"
+                #                     column_prefixes = [column_prefix_effect]
+                #                     if len(interaction) > 0:
+                #                         column_prefix_diff = f"{main_level}:{factor_reference[main_factor]}({main_factor}) effect difference for {genotype}:{factor_reference[other_factor]}({other_factor})"
+                #                         column_prefixes.append(column_prefix_diff)
+                #####
+
+                multi_comparisons_to_do[comparison_name] = {
+                    "type": comparison_type,
+                    "main_factor": main_factor,
+                    "factor_reference": factor_reference,
+                    "df_factor": df_factors,
+                    "interaction": interactions,
+                    "method": method,
+                    "options": options,
+                    "method_name": method_name,
+                    "multi_comp_name": multi_comp_name
+                }
+        return multi_comparisons_to_do
+
+    def parse_comparisons(self):
+        comparisons_to_do = {}
+        for group in self.comparison:
+            comparisons_to_do[group] = {}
+            for method_name in self.comparison[group]:
+                comp_type = self.comparison[group][method_name]["type"]
+                if comp_type == "ab":
+                    comparisons_to_do[group].update(
+                        self.parse_single_comparisons(group, method_name, comp_type)
+                    )
+                elif comp_type == "multi":
+                    comparisons_to_do[group].update(
+                        self.parse_multi_comparisons(group, method_name, comp_type)
+                    )
+                else:
+                    raise ValueError(f"Don't know what to do with type {comp_type}.")
+        return comparisons_to_do
 
     def _verify(self):
         """
@@ -380,11 +483,16 @@ class Analysis:
         NB
             The NB instance to use.
         """
+        dependencies = [
+            ppg.FunctionInvariant("FI_ana", self.summary_markdown),
+            ppg.FunctionInvariant("FI_ana", self.summary_markdown),
+        ]
 
         if "name" in self.reports:
-            return NB(self.reports["name"])
+            nb = NB(self.reports["name"], dependencies=dependencies)
         else:
-            return NB("run_report")
+            nb = NB("run_report", dependencies=dependencies)
+        return nb
 
     def has_gene_filter_specified(self) -> bool:
         """
@@ -431,7 +539,7 @@ class Analysis:
         at_least = filter_spec.get("at_least", 1)
         return filter_function(threshold, at_least, canonical_chromosomes, biotypes)
 
-    def comparison_method(self, method: str) -> Any:
+    def comparison_method(self, group_name: str, method: str) -> Any:
         """
         Returns an instance of a comparison method.
 
@@ -455,7 +563,6 @@ class Analysis:
         ValueError
             If the method is not found in the module.
         """
-        assert method in self.comparison
         module = sys.modules["mbf_comparisons.methods"]
         if not hasattr(module, method):
             raise ValueError(
@@ -463,18 +570,20 @@ class Analysis:
             )
         method_ = getattr(module, method)
         options = {
-            "laplace_offset": self.comparison[method].get("laplace_offset", 0),
-            "include_other_samples_for_variance": self.comparison[method].get(
-                "include_other_samples_for_variance", True
+            "laplace_offset": self.comparison[group_name][method].get(
+                "laplace_offset", 0
             ),
+            "include_other_samples_for_variance": self.comparison[group_name][
+                method
+            ].get("include_other_samples_for_variance", True),
         }
-        if "parameters" in self.comparison[method]:
-            parameters = self.comparison[method]["parameters"]
+        if "parameters" in self.comparison[group_name][method]:
+            parameters = self.comparison[group_name][method]["parameters"]
             return method_(**parameters), options
         else:
             return method_(), options
 
-    def deg_filter_expressions(self, method: str) -> List[Any]:
+    def deg_filter_expressions(self, condition_group: str, method: str) -> List[Any]:
         """
         Returns the filter expression used to filter the DE genes after runnning
         the comparison.
@@ -492,8 +601,8 @@ class Analysis:
             List of filter expressions.
         """
         default = [[["FDR", "<=", 0.05], ["log2FC", "|>", 1]]]
-        if "filter_expressions" in self.comparison[method]:
-            expr = self.comparison[method]["filter_expressions"]
+        if "filter_expressions" in self.comparison[condition_group][method]:
+            expr = self.comparison[condition_group][method]["filter_expressions"]
             return expr
         else:
             return default
@@ -532,116 +641,124 @@ class Analysis:
         del d["_genome"]
         return "Analysis(\n" + pp.pformat(d) + "\n)"
 
-    def summary(self) -> str:
-        """
-        Generates a run report summary and returns it as string.
-
-        This is intended for double checking the analysis settings and
-        should countain all the information inferred from the run.toml.
-
-        Returns
-        -------
-        str
-            Summary of run settings.
-        """
-        pp = PrettyPrinter(indent=4)
-        report_header = f"Analysis from toml file '{self.run_toml}'\n\n"
-        report_header += "Specification\n-------------\n" + self.pretty() + "\n\n"
-        report_header += f"Genome used: {self.genome.name}\n"
-        aligner, aligner_params = self.aligner()
-        report_header += (
-            f"Aligner used: {aligner.name} with parameter {aligner_params}\n"
-        )
-        report_header += f"Run-IDs: {pp.pformat(self.run_ids)}\n"
-        report_header += (
-            f"Fastq-Processor: {self.fastq_processor().__class__.__name__}\n"
-        )
-        raw_counter = self.raw_counter()
-        norm_counter = self.norm_counter()
-        report_header += f"Raw counter: {raw_counter.__name__}\n"
-        report_header += f"Norm counter: {norm_counter.__name__}\n"
-        report_header += "\nSamples\n-------\n"
-        df_samples = self.sample_df()
-        report_header += pp.pformat(df_samples)
-        conditions = [x for x in df_samples.columns if x.startswith("group")]
-        report_header += "\n\nComparisons requested\n---------------------\n"
-        comparisons_to_do: Dict[str, List] = {}
-        for condition in conditions:
-            comparisons_to_do[condition] = []
-            df_in = pd.read_csv(f"incoming/{condition}.tsv", sep="\t")
-            for _, row in df_in.iterrows():
-                comparisons_to_do[condition].append(
-                    (row["a"], row["b"], row["comparison_name"])
-                )
-            report_header += f"Comparison group: '{condition}'\n"
-            report_header += pp.pformat(df_in) + "\n"
-        report_header += f"\nGenes\n-----\n"
-        genes_used_name = f"Genes_{self.genome.name}"
-        if self.has_gene_filter_specified():
-            report_header += "Genes filtered prior to DE analysis by: \n"
-            if (
-                "canonical" in self.genes["filter"]
-                and self.genes["filter"]["canonical"]
-            ):
-                report_header += "- canonical chromosomes only\n"
-                genes_used_name += "_canonical"
-            if "biotypes" in self.genes["filter"]:
-                at_least = self.genes["filter"].get("at_least", 1)
-                report_header += (
-                    f"- biotype in {pp.pformat(self.genes['filter']['biotypes'])}\n"
-                )
-                genes_used_name += "_biotypes"
-            if "cpm_threshold" in self.genes["filter"]:
-                threshold = self.genes["filter"]["cpm_threshold"]
-                report_header += f"- at least {at_least} samples with normalized expression >= {threshold}\n"
-                genes_used_name += f"_{at_least}samples>={threshold}"
-        report_header += f"Genes used: {genes_used_name}\n"
-        report_header += f"\nComparisons\n-----------\n"
-        for condition_group in conditions:
-            report_header += f"From '{condition_group}':\n"
-            for method_name in self.comparison:
-                _, options = self.comparison_method(method_name)
-                for cond1, cond2, _ in comparisons_to_do[condition_group]:
-                    if options["include_other_samples_for_variance"]:
-                        x = "fit on all samples"
-                    else:
-                        x = "fit on conditions"
-                    desc = f"compare {cond1} vs {cond2} using {method_name} (offset={options['laplace_offset']}, {x})\n"
-                    report_header += desc
-        report_header += f"\nDownstream Analysis\n-------------------\n"
-        for downstream in self.downstream:
-            if downstream == "pathway_analysis":
-                for pathway_method in self.downstream[downstream]:
-                    if pathway_method == "ora":
-                        collections = ["h"]
-                        if "collections" in self.downstream[downstream][pathway_method]:
-                            collections = self.downstream[downstream][pathway_method][
-                                "collections"
-                            ]
-                        report_header += f"Over-Representation Analysis (ORA)\n"
-                        report_header += f"Collections used: {collections}\n"
-                    if pathway_method == "gsea":
-                        collections = ["h"]
-                        if "collections" in self.downstream[downstream][pathway_method]:
-                            collections = self.downstream[downstream][pathway_method][
-                                "collections"
-                            ]
-                        parameter = {"permutations": 1000}
-                        if "parameter" in self.downstream[downstream][pathway_method]:
-                            parameter = self.downstream[downstream][pathway_method][
-                                "parameter"
-                            ]
-                        report_header += "Gene Set Enrichment Analysis (GSEA)\n"
-                        report_header += f"Collections: {collections}\n"
-                        report_header += f"Parameters: {parameter}\n"
-        combination_df = self.combination_df()
-        if combination_df is not None:
-            report_header += (
-                f"\nSet operations on comparisons\n-----------------------------\n"
-            )
-            report_header += pp.pformat(combination_df)
-
-        return report_header
+    # def summary(self) -> str:
+    # """
+    # Generates a run report summary and returns it as string.
+    #
+    # This is intended for double checking the analysis settings and
+    # should countain all the information inferred from the run.toml.
+    #
+    # Returns
+    # -------
+    # str
+    # Summary of run settings.
+    # """
+    # pp = PrettyPrinter(indent=4)
+    # report_header = f"Analysis from toml file '{self.run_toml}'\n\n"
+    # report_header += "Specification\n-------------\n" + self.pretty() + "\n\n"
+    # report_header += f"Genome used: {self.genome.name}\n"
+    # aligner, aligner_params = self.aligner()
+    # report_header += (
+    # f"Aligner used: {aligner.name} with parameter {aligner_params}\n"
+    # )
+    # report_header += f"Run-IDs: {pp.pformat(self.run_ids)}\n"
+    # report_header += (
+    # f"Fastq-Processor: {self.fastq_processor().__class__.__name__}\n"
+    # )
+    # raw_counter = self.raw_counter()
+    # norm_counter = self.norm_counter()
+    # report_header += f"Raw counter: {raw_counter.__name__}\n"
+    # report_header += f"Norm counter: {norm_counter.__name__}\n"
+    # report_header += "\nSamples\n-------\n"
+    # df_samples = self.sample_df()
+    # report_header += pp.pformat(df_samples)
+    # conditions = [x for x in df_samples.columns if x.startswith("group")]
+    # report_header += "\n\nComparisons requested\n---------------------\n"
+    # comparisons_to_do: Dict[str, List] = {}
+    # for condition in conditions:
+    # comparisons_to_do[condition] = []
+    # df_in = pd.read_csv(f"incoming/{condition}.tsv", sep="\t")
+    # for _, row in df_in.iterrows():
+    # comparisons_to_do[condition].append(
+    # (row["a"], row["b"], row["comparison_name"])
+    # )
+    # report_header += f"Comparison group: '{condition}'\n"
+    # report_header += pp.pformat(df_in) + "\n"
+    # report_header += f"\nGenes\n-----\n"
+    # genes_used_name = f"Genes_{self.genome.name}"
+    # if self.has_gene_filter_specified():
+    # report_header += "Genes filtered prior to DE analysis by: \n"
+    # if (
+    # "canonical" in self.genes["filter"]
+    # and self.genes["filter"]["canonical"]
+    # ):
+    # report_header += "- canonical chromosomes only\n"
+    # genes_used_name += "_canonical"
+    # if "biotypes" in self.genes["filter"]:
+    # at_least = self.genes["filter"].get("at_least", 1)
+    # report_header += (
+    # f"- biotype in {pp.pformat(self.genes['filter']['biotypes'])}\n"
+    # )
+    # genes_used_name += "_biotypes"
+    # if "cpm_threshold" in self.genes["filter"]:
+    # threshold = self.genes["filter"]["cpm_threshold"]
+    # report_header += f"- at least {at_least} samples with normalized expression >= {threshold}\n"
+    # genes_used_name += f"_{at_least}samples>={threshold}"
+    # report_header += f"Genes used: {genes_used_name}\n"
+    # report_header += f"\nComparisons\n-----------\n"
+    # for condition_group in self.comparison:
+    # report_header += f"From '{condition_group}':\n"
+    #     comp_type = self.comparison[condition_group]["type"]
+    #     if comp_type == "ab":
+    #         for comparison_name in self.comparisons_to_do[condition_group]:
+    #             params = self.comparisons_to_do[condition_group][comparison_name]
+    #             if params["options"]["include_other_samples_for_variance"]:
+    #                 x = "fit on all samples"
+    #             else:
+    #                 x = "fit on conditions"
+    #             desc = f"- compare {params['cond1']} vs {params['cond2']} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
+    #             report_header += desc
+    #     else:
+    #         for comparison_name in self.comparisons_to_do[condition_group]:
+    #             params = self.comparisons_to_do[condition_group][comparison_name]
+    #             factors = ",".join(
+    #                 [f"{x}({y})" for x, y in params["factor_reference"].items()]
+    #             )
+    #             desc = f"- compare {comparison_name} with {factors} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
+    #             report_header += desc
+    # report_header += f"\nDownstream Analysis\n-------------------\n"
+    # for downstream in self.downstream:
+    #     if downstream == "pathway_analysis":
+    #         for pathway_method in self.downstream[downstream]:
+    #             if pathway_method == "ora":
+    #                 collections = ["h"]
+    #                 if "collections" in self.downstream[downstream][pathway_method]:
+    #                     collections = self.downstream[downstream][pathway_method][
+    #                         "collections"
+    #                     ]
+    #                 report_header += f"Over-Representation Analysis (ORA)\n"
+    #                 report_header += f"Collections used: {collections}\n"
+    #             if pathway_method == "gsea":
+    #                 collections = ["h"]
+    #                 if "collections" in self.downstream[downstream][pathway_method]:
+    #                     collections = self.downstream[downstream][pathway_method][
+    #                         "collections"
+    #                     ]
+    #                 parameter = {"permutations": 1000}
+    #                 if "parameter" in self.downstream[downstream][pathway_method]:
+    #                     parameter = self.downstream[downstream][pathway_method][
+    #                         "parameter"
+    #                     ]
+    #                 report_header += "Gene Set Enrichment Analysis (GSEA)\n"
+    #                 report_header += f"Collections: {collections}\n"
+    #                 report_header += f"Parameters: {parameter}\n"
+    # combination_df = self.combination_df()
+    # if combination_df is not None:
+    #     report_header += (
+    #         f"\nSet operations on comparisons\n-----------------------------\n"
+    #     )
+    #     report_header += pp.pformat(combination_df)
+    # return report_header
 
     def summary_markdown(self) -> str:
         """
@@ -655,12 +772,19 @@ class Analysis:
         str
             Summary of run settings.
         """
+
+        def __comp_header(comp_type):
+            if comp_type == "ab":
+                return "Comparisons pairwise: \n"
+            elif comp_type == "multi":
+                return "Comparisons multi-factor: \n"
+            else:
+                raise ValueError(
+                    f"Don't know what to do with comparison type {comp_type}."
+                )
+
         pp = PrettyPrinter(indent=4)
         report_header = f"## Analysis from toml file '{self.run_toml}'\n"
-        report_header += "### Specification  \n"
-        for line in self.pretty().split("\n"):
-            report_header += line + "  \n"
-        report_header += "\n"
         report_header += f"Genome used: {self.genome.name}  \n"
         aligner, aligner_params = self.aligner()
         report_header += (
@@ -677,18 +801,23 @@ class Analysis:
         report_header += "\n### Samples  \n  \n"
         df_samples = self.sample_df()
         report_header += df_to_markdown_table(df_samples)
-        conditions = [x for x in df_samples.columns if x.startswith("group")]
         report_header += "\n\n### Comparisons requested  \n"
-        comparisons_to_do: Dict[str, List] = {}
-        for condition in conditions:
-            comparisons_to_do[condition] = []
-            df_in = pd.read_csv(f"incoming/{condition}.tsv", sep="\t")
-            for _, row in df_in.iterrows():
-                comparisons_to_do[condition].append(
-                    (row["a"], row["b"], row["comparison_name"])
-                )
-            report_header += f"Comparison group: '{condition}'  \n\n"
-            report_header += df_to_markdown_table(df_in) + "\n"
+        for group_name in self.comparison:
+            report_header += f"Comparison group: '{group_name} \n'"
+            for method_name in self.comparison[group_name]:
+                report_header += f"\nMethod: {method_name}"
+                comp_type = self.comparison[group_name][method_name]["type"]
+                if comp_type == "ab":
+                    report_header += "(a vs b) \n\n"
+                elif comp_type == "multi":
+                    report_header += "(multi) \n\n"
+                else:
+                    raise ValueError("Don't know what to do with type {comp_type}.")
+                filepath = self.comparison[group_name][method_name][
+                    "path"
+                ]  ## ensure field
+                df_in = pd.read_csv(filepath, sep="\t")
+                report_header += df_to_markdown_table(df_in) + "\n"
         report_header += f"\n### Genes  \n"
         genes_used_name = f"Genes_{self.genome.name}"
         if self.has_gene_filter_specified():
@@ -711,16 +840,23 @@ class Analysis:
                 genes_used_name += f"_{at_least}samples>={threshold}"
         report_header += f"Genes used: {genes_used_name}  \n"
         report_header += f"\n### Comparisons  \n"
-        for condition_group in conditions:
+        for condition_group in self.comparison:
             report_header += f"From '{condition_group}':  \n"
-            for method_name in self.comparison:
-                _, options = self.comparison_method(method_name)
-                for cond1, cond2, _ in comparisons_to_do[condition_group]:
-                    if options["include_other_samples_for_variance"]:
+            for comparison_name in self.comparisons_to_do[condition_group]:
+                params = self.comparisons_to_do[condition_group][comparison_name]
+                comp_type = params["type"]
+                if comp_type == "ab":
+                    if params["options"]["include_other_samples_for_variance"]:
                         x = "fit on all samples"
                     else:
                         x = "fit on conditions"
-                    desc = f"- compare {cond1} vs {cond2} using {method_name} (offset={options['laplace_offset']}, {x})  \n"
+                    desc = f"- compare {params['cond1']} vs {params['cond2']} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
+                    report_header += desc
+                else:
+                    factors = ",".join(
+                        [f"{x}({y})" for x, y in params["factor_reference"].items()]
+                    )
+                    desc = f"- compare {comparison_name} with {factors} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
                     report_header += desc
         report_header += f"\n### Downstream Analysis  \n"
         for downstream in self.downstream:
@@ -754,6 +890,10 @@ class Analysis:
             report_header += df_to_markdown_table(combination_df)
         return report_header
 
+    def specification(self):
+        report_spec = "\n### Specification  \n" + self.pretty()
+        return report_spec
+
     def combinations(self) -> Iterator:
         df_combinations = self.combination_df()
         if df_combinations is not None:
@@ -763,6 +903,7 @@ class Analysis:
                 comparisons_to_add = row["comparison_names"].split(",")
                 assert_uniqueness(comparisons_to_add)
                 if row["operation"] == "difference":
+                    operations = "Set difference"
 
                     def generator(new_name, genes_to_combine):
                         return mbf_genomics.genes.genes_from.FromDifference(
@@ -773,6 +914,7 @@ class Analysis:
                         )
 
                 elif row["operation"] == "intersection":
+                    operations = "Intersection"
 
                     def generator(new_name, genes_to_combine):
                         return mbf_genomics.genes.genes_from.FromIntersection(
@@ -780,13 +922,14 @@ class Analysis:
                         )
 
                 elif row["operation"] == "union":
+                    operations = "Union"
 
                     def generator(new_name, genes_to_combine):
                         return mbf_genomics.genes.genes_from.FromAny(
                             new_name, genes_to_combine, sheet_name="Unions"
                         )
 
-                yield condition_group, new_name_prefix, comparisons_to_add, generator
+                yield condition_group, new_name_prefix, comparisons_to_add, generator, operations
 
     def get_fastqs(self):
         fill_incoming(self.run_ids)
