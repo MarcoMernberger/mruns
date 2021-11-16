@@ -5,7 +5,8 @@ Automatic baseline analysis runs
 
 ## Description
 
-A longer description of your project goes here...
+This contains some tools to facilitate automatic analysis runs based on just a
+toml file and one or more sample specification files.
 
 
 ## Note
