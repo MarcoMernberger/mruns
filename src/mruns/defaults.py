@@ -13,7 +13,6 @@ from mbf_genomics.annotator import Annotator
 from pypipegraph import Job
 from mreports import MarkdownItem, PlotItem, HTMLItem, Item
 from mpathways import GSEA, GMTCollection, MSigChipEnsembl, MSigDBCollection, ORAHyper
-from mdataframe import MDF, ClassLabel
 from mplots import volcanoplot
 from .base import Analysis
 from .util import assert_uniqueness

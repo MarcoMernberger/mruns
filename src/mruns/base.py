@@ -27,7 +27,6 @@ import pypipegraph as ppg
 import tomlkit
 import logging
 import sys
-import sys
 import inspect
 import json
 import mbf_genomes
