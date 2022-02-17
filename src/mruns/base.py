@@ -802,7 +802,7 @@ class Analysis:
         report_header += df_to_markdown_table(df_samples)
         report_header += "\n\n### Comparisons requested  \n"
         for group_name in self.comparison:
-            report_header += f"Comparison group: '{group_name} \n'"
+            report_header += f"Comparison group: '{group_name}' \n"
             for method_name in self.comparison[group_name]:
                 report_header += f"\nMethod: {method_name}"
                 comp_type = self.comparison[group_name][method_name]["type"]
