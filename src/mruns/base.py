@@ -412,7 +412,7 @@ class Analysis:
             fpath = self.incoming / f"{col}.tsv"
             if not fpath.exists():
                 raise FileNotFoundError(
-                    "Group column {col} specified, but no file {str(fpath)} found."
+                    f"Group column {col} specified, but no file {str(fpath)} found."
                 )
             df_groups = pd.read_csv(fpath, sep="\t")
             columns = ["a", "b", "comparison_name", "comment"]

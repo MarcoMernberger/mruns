@@ -15,6 +15,30 @@ __copyright__ = "Copyright (c) 2020 Marco Mernberger"
 __license__ = "mit"
 
 
+def check_folders(root_folder: Path, run_id: str) -> Path:
+    "breadth first search for a subfolder"
+    folders_to_check = [root_folder]
+    while len(folders_to_check) > 0:
+        folder = folders_to_check.pop(0)
+        f = folder / run_id
+        if f.exists():
+            return f
+        else:
+            for sub in folder.iterdir():
+                f = folder / sub
+                if f.is_dir():
+                    folders_to_check.append(f)
+    raise ValueError(f"Path for {run_id} not found.")
+
+
+def find_folder(run_id: str) -> Path:
+    main_folder = Path("/rose/ffs/incoming")
+    if not main_folder.exists():
+        raise ValueError(f"Main path {str(main_folder)} not available, check server mounts.")
+    run_folder = check_folders(main_folder, run_id)
+    return run_folder
+
+
 def filter_function(
     threshold: float = 1,
     at_least: int = 1,
@@ -122,13 +146,32 @@ def df_to_markdown_table(df: DataFrame) -> str:
     return ret
 
 
+def dir_is_empty(directory: Path) -> bool:
+    """
+    dir_is_empty checks if a directory is empty.
+
+    Parameters
+    ----------
+    directory : Path
+        pathlib Path to directory.
+
+    Returns
+    -------
+    bool
+        True if any file is located in the directory.
+    """
+    return not any(directory.iterdir())
+
+
 def fill_incoming(run_ids):
-    target_dirs = [Path(f"incoming/{run_id}") for run_id in run_ids]
     normal_path = Path("/rose/ffs/incoming")
     nextseq_path = Path("/rose/ffs/incoming/NextSeq")
-    for path in target_dirs:
-        path.mkdir(exist_ok=True, parents=True)
-    #  sentinel_files = [target_dir / "sentinel.txt" for target_dir in target_dirs]
+    ids_to_fetch = []
+    for run_id in run_ids:
+        target_path = Path("incoming") / run_id
+        target_path.mkdir(exist_ok=True, parents=True)
+        if dir_is_empty(target_path):
+            ids_to_fetch.append(run_id)
 
     def __check_path(path):
         for filename in path.iterdir():
@@ -137,7 +180,7 @@ def fill_incoming(run_ids):
         return False
 
     def copy_fastq(run_id: str, sentinelfile: Path):
-        path_2_files = None
+        path_2_files = find_folder(run_id)
         run_folder = normal_path / run_id
         if run_folder.exists():
             if __check_path(run_folder / "Unaligned"):
@@ -175,7 +218,7 @@ def fill_incoming(run_ids):
                     )
                     sentinel.write(f"{filename.name}\n")
 
-    for run_id in run_ids:
+    for run_id in ids_to_fetch:
         sentinel_file = Path(f"incoming/{run_id}") / "sentinel.txt"
         if not sentinel_file.exists():
             copy_fastq(run_id, sentinel_file)
