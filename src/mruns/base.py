@@ -145,9 +145,7 @@ class Analysis:
         for _, row in df_in.iterrows():
             comparison_name = f"{row['comparison_name']}({method_name})"
             if comparison_name in seen:
-                raise ValueError(
-                    "Duplicate comparison name  {comparison_name} in {path}."
-                )
+                raise ValueError("Duplicate comparison name  {comparison_name} in {path}.")
 
             comparisons_to_do[comparison_name] = {
                 "type": comparison_type,
@@ -213,7 +211,7 @@ class Analysis:
                     "method": method,
                     "options": options,
                     "method_name": method_name,
-                    "multi_comp_name": multi_comp_name
+                    "multi_comp_name": multi_comp_name,
                 }
         return multi_comparisons_to_do
 
@@ -266,13 +264,9 @@ class Analysis:
                 attr_dict = getattr(self, key)
                 for field in _required_fields[key]:
                     if field not in attr_dict:
-                        raise ValueError(
-                            f"Required field '{field}' in section {key} is missing."
-                        )
+                        raise ValueError(f"Required field '{field}' in section {key} is missing.")
             else:
-                raise ValueError(
-                    f"Required section '{key}' missing from {str(self.run_toml)}."
-                )
+                raise ValueError(f"Required section '{key}' missing from {str(self.run_toml)}.")
 
         # assert the type
         if self.analysis_type not in self.__allowed_types:
@@ -281,15 +275,11 @@ class Analysis:
         for run_id in self.run_ids:
             if not (self.incoming / run_id).exists():
                 print(self.incoming.absolute())
-                raise FileNotFoundError(
-                    f"Folder {run_id} not present in '{str(self.incoming)}'."
-                )
+                raise FileNotFoundError(f"Folder {run_id} not present in '{str(self.incoming)}'.")
                 # TODO automatically pulliong the data from rose/incoming ...
         # check samples
         if not Path(self.path_to_samples_df).exists():
-            raise FileNotFoundError(
-                f"No samples.tsv in {self.incoming}. Please create it."
-            )
+            raise FileNotFoundError(f"No samples.tsv in {self.incoming}. Please create it.")
         kit = self.samples["kit"]
         if kit not in self.__known_kits:
             raise ValueError(
@@ -299,9 +289,7 @@ class Analysis:
         species = self.alignment["species"]
         if species not in self.__accepted_species:
             # for some donwstream analysis we can only handle mouse and human automatically
-            raise ValueError(
-                f"Provided species {species} not in {str(self.__accepted_species)}."
-            )
+            raise ValueError(f"Provided species {species} not in {str(self.__accepted_species)}.")
 
     @property
     def genome(self) -> EnsemblGenome:
@@ -340,14 +328,12 @@ class Analysis:
         module = sys.modules["mbf_externals.aligners"]
         aligner_name = self.alignment["aligner"]
         if not hasattr(module, aligner_name):
-            raise ValueError(
-                f"No aligner named {aligner_name} found in mbf_externals.aligners.py."
-            )
+            raise ValueError(f"No aligner named {aligner_name} found in mbf_externals.aligners.py.")
         aligner_ = getattr(module, aligner_name)
         aligner = aligner_()
         params = {}
         if "parameters" in self.alignment:
-            params = self.alignment["parameter"]
+            params = self.alignment["parameters"]
         return aligner, params
 
     def sample_df(self) -> DataFrame:
@@ -398,9 +384,7 @@ class Analysis:
         vids = df_samples["vid"].dropna()
         duplicate_vids = vids[vids.duplicated()].values
         if len(duplicate_vids) > 0:
-            raise ValueError(
-                f"The following vids where assigned twice: {list(duplicate_vids)}."
-            )
+            raise ValueError(f"The following vids where assigned twice: {list(duplicate_vids)}.")
         for c in df_samples.columns:
             if c.startswith("group"):
                 group_columns.append(c)
@@ -564,17 +548,13 @@ class Analysis:
         """
         module = sys.modules["mbf_comparisons.methods"]
         if not hasattr(module, method):
-            raise ValueError(
-                f"No method named {method} found in mbf_comparisons.methods.py."
-            )
+            raise ValueError(f"No method named {method} found in mbf_comparisons.methods.py.")
         method_ = getattr(module, method)
         options = {
-            "laplace_offset": self.comparison[group_name][method].get(
-                "laplace_offset", 0
+            "laplace_offset": self.comparison[group_name][method].get("laplace_offset", 0),
+            "include_other_samples_for_variance": self.comparison[group_name][method].get(
+                "include_other_samples_for_variance", True
             ),
-            "include_other_samples_for_variance": self.comparison[group_name][
-                method
-            ].get("include_other_samples_for_variance", True),
         }
         if "parameters" in self.comparison[group_name][method]:
             parameters = self.comparison[group_name][method]["parameters"]
@@ -778,21 +758,15 @@ class Analysis:
             elif comp_type == "multi":
                 return "Comparisons multi-factor: \n"
             else:
-                raise ValueError(
-                    f"Don't know what to do with comparison type {comp_type}."
-                )
+                raise ValueError(f"Don't know what to do with comparison type {comp_type}.")
 
         pp = PrettyPrinter(indent=4)
         report_header = f"## Analysis from toml file '{self.run_toml}'\n"
         report_header += f"Genome used: {self.genome.name}  \n"
         aligner, aligner_params = self.aligner()
-        report_header += (
-            f"Aligner used: {aligner.name} with parameter {aligner_params}  \n"
-        )
+        report_header += f"Aligner used: {aligner.name} with parameter {aligner_params}  \n"
         report_header += f"Run-IDs: {pp.pformat(self.run_ids)}  \n"
-        report_header += (
-            f"Fastq-Processor: {self.fastq_processor().__class__.__name__}  \n"
-        )
+        report_header += f"Fastq-Processor: {self.fastq_processor().__class__.__name__}  \n"
         raw_counter = self.raw_counter()
         norm_counter = self.norm_counter()
         report_header += f"Raw counter: {raw_counter.__name__}  \n"
@@ -812,30 +786,25 @@ class Analysis:
                     report_header += "(multi) \n\n"
                 else:
                     raise ValueError("Don't know what to do with type {comp_type}.")
-                filepath = self.comparison[group_name][method_name][
-                    "path"
-                ]  ## ensure field
+                filepath = self.comparison[group_name][method_name]["path"]  ## ensure field
                 df_in = pd.read_csv(filepath, sep="\t")
                 report_header += df_to_markdown_table(df_in) + "\n"
         report_header += f"\n### Genes  \n"
         genes_used_name = f"Genes_{self.genome.name}"
         if self.has_gene_filter_specified():
             report_header += "Genes filtered prior to DE analysis by:  \n"
-            if (
-                "canonical" in self.genes["filter"]
-                and self.genes["filter"]["canonical"]
-            ):
+            if "canonical" in self.genes["filter"] and self.genes["filter"]["canonical"]:
                 report_header += "- canonical chromosomes only\n"
                 genes_used_name += "_canonical"
             if "biotypes" in self.genes["filter"]:
                 at_least = self.genes["filter"].get("at_least", 1)
-                report_header += (
-                    f"- biotype in {pp.pformat(self.genes['filter']['biotypes'])}\n"
-                )
+                report_header += f"- biotype in {pp.pformat(self.genes['filter']['biotypes'])}\n"
                 genes_used_name += "_biotypes"
             if "cpm_threshold" in self.genes["filter"]:
                 threshold = self.genes["filter"]["cpm_threshold"]
-                report_header += f"- at least {at_least} samples with normalized expression >= {threshold}\n"
+                report_header += (
+                    f"- at least {at_least} samples with normalized expression >= {threshold}\n"
+                )
                 genes_used_name += f"_{at_least}samples>={threshold}"
         report_header += f"Genes used: {genes_used_name}  \n"
         report_header += f"\n### Comparisons  \n"
@@ -852,9 +821,7 @@ class Analysis:
                     desc = f"- compare {params['cond1']} vs {params['cond2']} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
                     report_header += desc
                 else:
-                    factors = ",".join(
-                        [f"{x}({y})" for x, y in params["factor_reference"].items()]
-                    )
+                    factors = ",".join([f"{x}({y})" for x, y in params["factor_reference"].items()])
                     desc = f"- compare {comparison_name} with {factors} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
                     report_header += desc
         report_header += f"\n### Downstream Analysis  \n"
@@ -864,22 +831,16 @@ class Analysis:
                     if pathway_method == "ora":
                         collections = ["h"]
                         if "collections" in self.downstream[downstream][pathway_method]:
-                            collections = self.downstream[downstream][pathway_method][
-                                "collections"
-                            ]
+                            collections = self.downstream[downstream][pathway_method]["collections"]
                         report_header += f"\nOver-Representation Analysis (ORA)  \n"
                         report_header += f"Collections used: {collections}  \n"
                     if pathway_method == "gsea":
                         collections = ["h"]
                         if "collections" in self.downstream[downstream][pathway_method]:
-                            collections = self.downstream[downstream][pathway_method][
-                                "collections"
-                            ]
+                            collections = self.downstream[downstream][pathway_method]["collections"]
                         parameter = {"permutations": 1000}
                         if "parameter" in self.downstream[downstream][pathway_method]:
-                            parameter = self.downstream[downstream][pathway_method][
-                                "parameter"
-                            ]
+                            parameter = self.downstream[downstream][pathway_method]["parameter"]
                         report_header += "\nGene Set Enrichment Analysis (GSEA)  \n"
                         report_header += f"Collections: {collections}  \n"
                         report_header += f"Parameters: {parameter}  \n"
