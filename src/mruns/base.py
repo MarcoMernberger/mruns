@@ -6,7 +6,6 @@
 from mruns import __version__
 from pathlib import Path
 from dataclasses import dataclass
-from dataclasses_json import dataclass_json
 from typing import Optional, Callable, List, Dict, Tuple, Any, ClassVar, Iterator
 from mreports import NB
 from mbf_genomes import EnsemblGenome
