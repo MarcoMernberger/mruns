@@ -45,7 +45,7 @@ _logger = logging.getLogger(__name__)
 
 
 _required_fields = {
-    "project": ["name", "analysis_type", "run_ids", "runs_folder"],
+    "project": ["name", "analysis_type", "run_ids"],
     "samples": ["df_samples", "reverse_reads", "kit", "stranded"],
     "alignment": ["species", "revision", "aligner"],
     "genes": [],
@@ -79,12 +79,12 @@ class Analysis:
         return Path("incoming")
 
     @property
-    def runs_folder(self):
+    def main_incoming(self):
         """
         The folder with all runs.
         """
-        if "runs_folder" in self.project:
-            return Path(self.project["runs_folder"])
+        if "main_incoming" in self.project:
+            return Path(self.project["main_incoming"]).resolve()
         return Path("/rose/ffs/incoming")
 
     @property
@@ -116,14 +116,14 @@ class Analysis:
     def path_to_combination_df(self):
         return self.incoming / self.combination.get("file", None)
 
-    @classmethod
-    def get_comparison_methods(cls):
-        module = sys.modules["comparisons.methods"]
-        ret = {}
-        for name, obj in inspect.getmembers(module):
-            if inspect.isclass(obj):
-                ret[name] = obj
-        return ret
+    # @classmethod
+    # def get_comparison_methods(cls):
+    #     module = sys.modules["comparisons.methods"]
+    #     ret = {}
+    #     for name, obj in inspect.getmembers(module):
+    #         if inspect.isclass(obj):
+    #             ret[name] = obj
+    #     return ret
 
     def __post_init__(self):
         """
@@ -292,7 +292,7 @@ class Analysis:
             if not (self.incoming / run_id).exists():
                 print(self.incoming.absolute())
                 raise FileNotFoundError(f"Folder {run_id} not present in '{str(self.incoming)}'.")
-                # TODO automatically pulliong the data from rose/incoming ...
+                # TODO automatically pulling the data from rose/incoming ...
         # check samples
         if not Path(self.path_to_samples_df).exists():
             raise FileNotFoundError(f"No samples.tsv in {self.incoming}. Please create it.")
@@ -931,7 +931,7 @@ class Analysis:
                 yield condition_group, new_name_prefix, comparisons_to_add, generator, operations
 
     def get_fastqs(self):
-        fill_incoming(self.run_ids, self.runs_folder, self.incoming)
+        fill_incoming(self.run_ids, self.main_incoming, self.incoming)
 
 
 def analysis(req_file: Path = Path("run.toml")) -> Analysis:

@@ -2,8 +2,8 @@
 name = "Test"
 analysis_type = "RNAseq"
 run_ids = ["testrun"]
-incoming = "tests/data"
-main_incoming = "tests/data/"
+incoming = "../../data"
+main_incoming = "../../data/"
 
 [samples]
 df_samples = "samples.tsv"

@@ -14,6 +14,7 @@ __license__ = "mit"
 def test_analysis_parser(ana):
     assert ana.name == "Test"
     assert ana.analysis_type == "RNAseq"
+    assert ana.main_incoming == Path("tests/data/").resolve()
     assert isinstance(ana.incoming, Path)
     assert str(ana.incoming) == "tests/data"
     assert isinstance(ana.path_to_samples_df, Path)
@@ -59,3 +60,11 @@ def test_analysis_parser(ana):
 
 def test_analysis_incoming(ana):
     assert isinstance(ana.incoming, Path)
+
+
+@pytest.mark.usefixtures("new_pipegraph_no_qc")
+def test_set_genome(ana_pypipe):
+    ana = ana_pypipe
+    assert hasattr(ana_pypipe, "genome")
+    assert ana.genome.species == "Homo_sapiens"
+    assert ana.genome.revision == "98"
