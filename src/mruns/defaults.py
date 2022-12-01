@@ -8,8 +8,8 @@ from typing import Optional, Callable, List, Dict, Tuple, Any, ClassVar, Union, 
 from pandas import DataFrame
 from mpathways import GSEA, GMTCollection, MSigChipEnsembl, MSigDBCollection, ORAHyper
 from mdataframe import MDF, ClassLabel
-from mbf_genomics.genes import Genes
-from mbf_genomics.annotator import Annotator
+from mbf.genomics.genes import Genes
+from mbf.genomics.annotator import Annotator
 from pypipegraph import Job
 from mreports import MarkdownItem, PlotItem, HTMLItem, Item
 from mpathways import GSEA, GMTCollection, MSigChipEnsembl, MSigDBCollection, ORAHyper
@@ -102,9 +102,7 @@ class Defaults:
         self.genes_parameters[genes.name]["group"] = condition_group
         if comparison_annotators is None:
             comparison_annotators = {}
-        self.genes_parameters[genes.name][
-            "comparison_annotators"
-        ] = comparison_annotators
+        self.genes_parameters[genes.name]["comparison_annotators"] = comparison_annotators
         self.genes_parameters[genes.name]["volcano_plot_columns"] = volcano_plot_columns
         self.genes_parameters[genes.name]["genes"] = genes
         self.genes_parameters[genes.name]["section"] = section
@@ -169,9 +167,7 @@ class Defaults:
                         genes,
                         all_samples,
                         index_column="gene_stable_id",
-                        dependencies=[
-                            genes.add_annotator(anno) for anno in self.annotators
-                        ]
+                        dependencies=[genes.add_annotator(anno) for anno in self.annotators]
                         + self.genes_parameters[genes.name]["dependencies"],
                         annotators=self.annotators,
                     )
@@ -179,9 +175,7 @@ class Defaults:
                     .scale()
                     .reduce()
                 )
-                pcas.append(
-                    (pca_all, f"{genes.name}_all_samples_pca.png", " using all samples")
-                )
+                pcas.append((pca_all, f"{genes.name}_all_samples_pca.png", " using all samples"))
             for p, filename, nbsuffix in pcas:
                 p = p.cluster(self.genes_parameters[genes.name]["class_label"], axis=1)
                 p = p.transform(
@@ -203,20 +197,14 @@ class Defaults:
                 )
                 items.append(pl)
             for comp_name in self.genes_parameters[genes.name]["comparison_annotators"]:
-                comparison_ab = self.genes_parameters[genes.name][
-                    "comparison_annotators"
-                ][comp_name]
+                comparison_ab = self.genes_parameters[genes.name]["comparison_annotators"][
+                    comp_name
+                ]
                 volcano_plot_columns = None
-                if (
-                    self.genes_parameters[genes.name]["volcano_plot_columns"]
-                    is not None
-                ):
-                    volcano_plot_columns = self.genes_parameters[genes.name][
-                        "volcano_plot_columns"
-                    ]
+                if self.genes_parameters[genes.name]["volcano_plot_columns"] is not None:
+                    volcano_plot_columns = self.genes_parameters[genes.name]["volcano_plot_columns"]
                 elif (
-                    "FDR" in comparison_ab.column_lookup
-                    and "log2FC" in comparison_ab.column_lookup
+                    "FDR" in comparison_ab.column_lookup and "log2FC" in comparison_ab.column_lookup
                 ):
                     volcano_plot_columns = [
                         comparison_ab.column_lookup["FDR"],
@@ -251,36 +239,29 @@ class Defaults:
 
     def __prepare_ora(self):
         hes = []
-        for downstream in self.analysis.downstream:
-            if downstream == "pathway_analysis":
-                for pathway_method in self.analysis.downstream[downstream]:
-                    if pathway_method == "ora":
-                        collections = ["h"]
-                        if (
-                            "collections"
-                            in self.analysis.downstream[downstream][pathway_method]
-                        ):
-                            collections = self.analysis.downstream[downstream][
-                                pathway_method
-                            ]["collections"]
-                        # run ora
-                        for collection in collections:
-                            he = ORAHyper(
-                                name=f"ORA({collection})",
-                                genome=self.genes_used.genome,
-                                background_genes=self.genes_used,
-                                collection=collection,
-                            )
-                            hes.append(he)
-                        if len(collections) > 1:
-                            hes.append(
-                                ORAHyper(
-                                    name="ORA(all)",
-                                    genome=self.genes_used.genome,
-                                    background_genes=self.genes_used,
-                                    collection=collections,
-                                )
-                            )
+        for pathway_method in self.analysis.pathway_analysis:
+            if pathway_method == "ora":
+                collections = ["h"]
+                if "collections" in self.analysis.pathway_analysis[pathway_method]:
+                    collections = self.analysis.pathway_analysis[pathway_method]["collections"]
+                # run ora
+                for collection in collections:
+                    he = ORAHyper(
+                        name=f"ORA({collection})",
+                        genome=self.genes_used.genome,
+                        background_genes=self.genes_used,
+                        collection=collection,
+                    )
+                    hes.append(he)
+                if len(collections) > 1:
+                    hes.append(
+                        ORAHyper(
+                            name="ORA(all)",
+                            genome=self.genes_used.genome,
+                            background_genes=self.genes_used,
+                            collection=collections,
+                        )
+                    )
         self.hes = hes
 
     def get_oras(self):

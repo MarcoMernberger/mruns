@@ -3,47 +3,234 @@
 
 """util.py: Contains some utility functions."""
 
-from typing import Callable, List, Any
+from typing import Callable, List, Any, Optional
 from pathlib import Path
 from pandas import DataFrame
 import shutil
 import tomlkit
 import numpy as np
+import logging
+import glob
+
 
 __author__ = "Marco Mernberger"
 __copyright__ = "Copyright (c) 2020 Marco Mernberger"
 __license__ = "mit"
 
 
-def check_folders(root_folder: Path, run_id: str) -> Path:
-    "breadth first search for a subfolder"
-    folders_to_check = [root_folder]
+MACHINE_IDS = ["NB552003", "M03491", "M00754", "C00113"]
+
+
+def is_run_id(putative_run_id: str) -> bool:
+    """
+    Check if a supplied string is a valid sequencer run id.
+
+    Parameters
+    ----------
+    putative_run_id : str
+        the run id to check.
+
+    Returns
+    -------
+    bool
+        True, if it is a valid run id.
+    """
+    if putative_run_id[0].isdigit():
+        for mid in MACHINE_IDS:
+            if mid in putative_run_id:
+                return True
+    return False
+
+
+def locate_folder(run_id: str, main_incoming: Path) -> Path:
+    """
+    breadth first search for a run folder
+
+    Parameters
+    ----------
+    run_id : str
+        The run id of the run to find.
+    main_incoming : Path
+        The main incominb folder on our server.
+
+    Returns
+    -------
+    Path
+        _description_
+
+    Raises
+    ------
+    ValueError
+        _description_
+    ValueError
+        _description_
+    """
+    if not main_incoming.exists():
+        raise ValueError(
+            f"Main incoming path '{str(main_incoming)}' not available, check server mounts."
+        )
+    folders_to_check = [main_incoming]
     while len(folders_to_check) > 0:
         folder = folders_to_check.pop(0)
+        logging.info("checking {folder} ...")
         f = folder / run_id
         if f.exists():
             return f
         else:
             for sub in folder.iterdir():
-                f = folder / sub
-                if f.is_dir():
-                    folders_to_check.append(f)
+                if sub.is_dir() and not is_run_id(sub.name):
+                    folders_to_check.append(sub)
     raise ValueError(f"Path for {run_id} not found.")
 
 
-def find_folder(run_id: str) -> Path:
-    main_folder = Path("/rose/ffs/incoming")
-    if not main_folder.exists():
-        raise ValueError(f"Main path {str(main_folder)} not available, check server mounts.")
-    run_folder = check_folders(main_folder, run_id)
-    return run_folder
+def read_toml(req_file: Path) -> dict:
+    """
+    Reads a tomlfile and returns a dict-like.
+
+    Parameters
+    ----------
+    req_file : Path
+        Path to toml file.
+
+    Returns
+    -------
+    dict
+        dict-like representation of toml.
+    """
+    with req_file.open("r") as op:
+        p = tomlkit.loads(op.read())
+    return p
+
+
+def dir_is_empty(directory: Path) -> bool:
+    """
+    dir_is_empty checks if a directory is empty.
+
+    Parameters
+    ----------
+    directory : Path
+        pathlib Path to directory.
+
+    Returns
+    -------
+    bool
+        True if any file is located in the directory.
+    """
+    return not any(directory.iterdir())
+
+
+def is_fastq_folder(fastq_folder: Path) -> bool:
+    """
+    Checks if a folder contains fastq.gz files.
+
+    Parameters
+    ----------
+    fastq_folder : Path
+        Folder to be checked.
+
+    Returns
+    -------
+    bool
+        True, if fastq files present.
+    """
+    return len(glob.glob(str(fastq_folder) + "/*.fastq*")) > 0
+
+
+def find_fastq_folder(run_folder: Path) -> Path:
+    """
+    Locates the fastq folder in a run folder.
+
+    Parameters
+    ----------
+    run_folder : Path
+        The run folder on the main server.
+
+    Returns
+    -------
+    Path
+        Path to fastq files.
+
+    Raises
+    ------
+    ValueError
+        if no folder with fastq files could be found.
+    """
+    # check NextSeq style
+    ns_path = run_folder / run_folder.name
+    if ns_path.exists():
+        fastq_folders = [
+            Path(p) for p in sorted(glob.glob(str(ns_path) + "/Alignment_*/*/Fastq"), reverse=True)
+        ]
+        for fastq_folder in fastq_folders:
+            if is_fastq_folder(fastq_folder):
+                return fastq_folder
+
+    # check old style
+    old_path = run_folder / "Unaligned"
+    if old_path.exists() and is_fastq_folder(old_path):
+        return old_path
+    older_still = run_folder / "Data" / "Intensities" / "BaseCalls"
+    if old_path.exists() and is_fastq_folder(older_still):
+        return older_still
+    raise ValueError(f"No fastq folder found in path: {run_folder}.")
+
+
+def fill_incoming(run_ids: List[str], main_incoming: Path, incoming: Path):
+    """
+    Copies all the fastq files in the project folder.
+
+    Parameters
+    ----------
+    run_ids : List[str]
+        Run IDs needed for the project.
+    main_incoming : Path
+        Main path to sequencer runs.
+    """
+
+    def copy_fastq(run_folder: Path, sentinelfile: Path):
+        target_path = sentinelfile.parent
+        fastq_folder = find_fastq_folder(run_folder)
+        files_to_copy = [Path(p) for p in glob.glob(str(fastq_folder / "*.fastq*"))]
+        with sentinelfile.open("w") as sentinel:
+            sentinel.write("copied:\n")
+            for filename in files_to_copy:
+                shutil.copy(
+                    filename,
+                    target_path / (filename.name + "_tmp"),
+                )
+                shutil.move(
+                    target_path / (filename.name + "_tmp"),
+                    target_path / filename.name,
+                )
+                sentinel.write(f"{filename.name}\n")
+
+    ids_to_fetch = []
+    for run_id in run_ids:
+        target_path = incoming / run_id
+        target_path.mkdir(exist_ok=True, parents=True)
+        if dir_is_empty(target_path):
+            ids_to_fetch.append(run_id)
+    for run_id in ids_to_fetch:
+        target_path = incoming / run_id
+        sentinel_file = target_path / "info.txt"
+        run_folder = locate_folder(run_id, main_incoming)
+        if not sentinel_file.exists():
+            copy_fastq(run_folder, sentinel_file)
+
+
+def assert_uniqueness(list_of_objects: List[Any]):
+    try:
+        assert len(list_of_objects) == len(set(list_of_objects))
+    except AssertionError:
+        print(f"Duplicate objects passed: {list_of_objects}.")
+        raise
 
 
 def filter_function(
     threshold: float = 1,
     at_least: int = 1,
-    canonical_chromosomes: List[str] = None,
-    biotypes: List[str] = None,
+    canonical_chromosomes: Optional[List[str]] = None,
+    biotypes: Optional[List[str]] = None,
 ) -> Callable:
     """
     Filter function for RNAseq used to filter genes instances prior to DE analysis.
@@ -106,25 +293,6 @@ def filter_function(
     return get_filter
 
 
-def read_toml(req_file: Path):
-    """
-    Reads a tomlfile and returns a dict-like.
-
-    Parameters
-    ----------
-    req_file : Path
-        Path to toml file.
-
-    Returns
-    -------
-    [type]
-        [description]
-    """
-    with req_file.open("r") as op:
-        p = tomlkit.loads(op.read())
-    return p
-
-
 def df_to_markdown_table(df: DataFrame) -> str:
     """
     Turns a DataFrame into a markdown table format string.
@@ -144,91 +312,3 @@ def df_to_markdown_table(df: DataFrame) -> str:
     for _, row in df.iterrows():
         ret += "|" + "|".join([str(x) for x in row]) + "|\n"
     return ret
-
-
-def dir_is_empty(directory: Path) -> bool:
-    """
-    dir_is_empty checks if a directory is empty.
-
-    Parameters
-    ----------
-    directory : Path
-        pathlib Path to directory.
-
-    Returns
-    -------
-    bool
-        True if any file is located in the directory.
-    """
-    return not any(directory.iterdir())
-
-
-def fill_incoming(run_ids):
-    normal_path = Path("/rose/ffs/incoming")
-    nextseq_path = Path("/rose/ffs/incoming/NextSeq")
-    ids_to_fetch = []
-    for run_id in run_ids:
-        target_path = Path("incoming") / run_id
-        target_path.mkdir(exist_ok=True, parents=True)
-        if dir_is_empty(target_path):
-            ids_to_fetch.append(run_id)
-
-    def __check_path(path):
-        for filename in path.iterdir():
-            if str(filename).endswith("fastq.gz"):
-                return True
-        return False
-
-    def copy_fastq(run_id: str, sentinelfile: Path):
-        path_2_files = find_folder(run_id)
-        run_folder = normal_path / run_id
-        if run_folder.exists():
-            if __check_path(run_folder / "Unaligned"):
-                path_2_files = run_folder / "Unaligned"
-            elif __check_path(run_folder / "Data" / "Intensities" / "BaseCalls"):
-                path_2_files = run_folder / "Data" / "Intensities" / "BaseCalls"
-            else:
-                raise ValueError(f"No fastq files in {str(normal_path)}.")
-        else:
-            run_folder = nextseq_path / run_id
-            if run_folder.exists():
-                sub = run_folder / run_id
-                alignments = []
-                for s in sub.iterdir():
-                    if s.name.startswith("Alignment"):
-                        alignments.append(s)
-                for ss in alignments[-1].iterdir():
-                    path_2_files = ss / "Fastq"
-                    break
-                if not __check_path(path_2_files):
-                    raise ValueError(f"No fastq files in {str(nextseq_path)}.")
-        if path_2_files is None:
-            raise ValueError("Did not find the path to the files.")
-        # now we know the path to fastq files
-        with sentinelfile.open("w") as sentinel:
-            sentinel.write("copied:\n")
-            for filename in path_2_files.iterdir():
-                if filename.name.endswith("fastq.gz"):
-                    shutil.copy(
-                        filename, Path(f"incoming/{run_id}") / (filename.name + "_tmp"),
-                    )
-                    shutil.move(
-                        f"incoming/{run_id}/" + filename.name + "_tmp",
-                        f"incoming/{run_id}/" + filename.name,
-                    )
-                    sentinel.write(f"{filename.name}\n")
-
-    for run_id in ids_to_fetch:
-        sentinel_file = Path(f"incoming/{run_id}") / "sentinel.txt"
-        if not sentinel_file.exists():
-            copy_fastq(run_id, sentinel_file)
-
-    # return ppg.MultiFileGeneratingJob(sentinel_files, copy_fastq)
-
-
-def assert_uniqueness(list_of_objects: List[Any]):
-    try:
-        assert len(list_of_objects) == len(set(list_of_objects))
-    except AssertionError:
-        print(f"Duplicate objects passed: {list_of_objects}.")
-        raise

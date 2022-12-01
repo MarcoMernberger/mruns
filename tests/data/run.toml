@@ -1,24 +1,26 @@
 [project]
-name="Test"
-analysis_type="RNAseq"
-run_ids=["testrun"]
-incoming="tests/data"
+name = "Test"
+analysis_type = "RNAseq"
+run_ids = ["testrun"]
+incoming = "tests/data"
+runs_folder = "tests/data/"
 
 [samples]
-df_samples="samples.tsv"
-reverse_reads=false
-kit="QuantSeq" #fastq_processor="UMIExtractAndTrim"
-stranded=true
+df_samples = "samples.tsv"
+reverse_reads = false
+kit = "QuantSeq"           #fastq_processor="UMIExtractAndTrim"
+stranded = true
 
 [alignment]
-species="Homo_sapiens"
-revision=98
-aligner="STAR"
+species = "Homo_sapiens"
+revision = 98
+aligner = "STAR"
 
 [genes.filter]
 canonical = true
 biotypes = [
-    "protein_coding","snRNA",
+    "protein_coding",
+    "snRNA",
     "snoRNA",
     "miRNA",
     "3prime_overlapping_ncRNA",
@@ -37,21 +39,77 @@ biotypes = [
 ]
 cpm_threshold = 1
 
-[comparison.DESeq2Unpaired]
+[comparison]
+
+[comparison.ABpairs] # groupname, e.g. ABpairs
+
+# default method will be DESeq2Unpaired if this is missing
+method = "DESeq2Unpaired"
+
+# what type of comparison, simple A vs B (default) or multi
+type = "ab"
+
+# a tsv file with all comparisons to do, defaults to incoming/<groupname>.tsv
+file = "group.tsv"
+
+# what filter expressions to use to create gene lists
 filter_expressions = [
-    [["FDR", "<=", "0.05"], ["log2FC", "|>", "1"]],
-    [["FDR", "<=", "0.05"], ["log2FC", ">=", "1"]],
-    [["FDR", "<=", "0.05"], ["log2FC", "<=", "1"]],
+    [
+        [
+            "FDR",
+            "<=",
+            "0.05",
+        ],
+        [
+            "log2FC",
+            "|>",
+            "1",
+        ],
+    ],
+    [
+        [
+            "FDR",
+            "<=",
+            "0.05",
+        ],
+        [
+            "log2FC",
+            ">=",
+            "1",
+        ],
+    ],
+    [
+        [
+            "FDR",
+            "<=",
+            "0.05",
+        ],
+        [
+            "log2FC",
+            "<=",
+            "1",
+        ],
+    ],
 ]
-# parameters = {}
 
-[downstream.pathway_analysis]
+# put parameters for the method instantiation here
+parameters = {}
 
-    [downstream.pathway_analysis.ora]
-        collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
+# laplace_offset = 0 # default
+# include_other_samples_for_variance = true # default
 
-    [downstream.pathway_analysis.gsea]
-        collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
+
+[combination]
+# put combinations of gene lists/comparisons here
+file = "combinations.tsv"
+
+[pathway_analysis]
+
+[pathway_analysis.ora]
+collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
+
+[pathway_analysis.gsea]
+collections = ["c6", "c7", "c2", "c5", "h", "ipa"]
 
 [reports]
-name="run_report"
+name = "run_report"

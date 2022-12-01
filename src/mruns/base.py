@@ -8,8 +8,14 @@ from pathlib import Path
 from dataclasses import dataclass
 from typing import Optional, Callable, List, Dict, Tuple, Any, ClassVar, Iterator
 from mreports import NB
-from mbf_genomes import EnsemblGenome
-from mbf_externals import ExternalAlgorithm
+from mbf import genomes
+from mbf import genomics
+from mbf import align
+from mbf import comparisons
+from mbf.genomes import EnsemblGenome, Homo_sapiens, Mus_musculus
+from mbf.externals.aligners.base import Aligner
+from mbf.genomics.genes.anno_tag_counts import _NormalizationAnno, _FastTagCounter
+
 from pandas import DataFrame
 from .util import (
     filter_function,
@@ -19,7 +25,7 @@ from .util import (
     assert_uniqueness,
 )
 from pprint import PrettyPrinter
-from mbf_genomics.genes.anno_tag_counts import _NormalizationAnno, _FastTagCounter
+
 import dataclasses
 import pandas as pd
 import pypipegraph as ppg
@@ -28,11 +34,7 @@ import logging
 import sys
 import inspect
 import json
-import mbf_genomes
-import mbf_externals
-import mbf_align
-import mbf_genomics
-import mbf_comparisons
+
 
 __author__ = "Marco Mernberger"
 __copyright__ = "Copyright (c) 2020 Marco Mernberger"
@@ -43,7 +45,7 @@ _logger = logging.getLogger(__name__)
 
 
 _required_fields = {
-    "project": ["name", "analysis_type", "run_ids"],
+    "project": ["name", "analysis_type", "run_ids", "runs_folder"],
     "samples": ["df_samples", "reverse_reads", "kit", "stranded"],
     "alignment": ["species", "revision", "aligner"],
     "genes": [],
@@ -60,7 +62,7 @@ class Analysis:
     alignment: Dict[str, Any]
     genes: Dict[str, Any]
     comparison: Dict[str, Any]
-    downstream: Dict[str, Any]
+    pathway_analysis: Dict[str, Any]
     reports: Dict[str, Any]
     combination: Dict[str, Any]
     __allowed_types: ClassVar[List[str]] = ["RNAseq"]
@@ -75,6 +77,15 @@ class Analysis:
         if "incoming" in self.project:
             return Path(self.project["incoming"])
         return Path("incoming")
+
+    @property
+    def runs_folder(self):
+        """
+        The folder with all runs.
+        """
+        if "runs_folder" in self.project:
+            return Path(self.project["runs_folder"])
+        return Path("/rose/ffs/incoming")
 
     @property
     def analysis_type(self):
@@ -103,14 +114,11 @@ class Analysis:
 
     @property
     def path_to_combination_df(self):
-        if "set_operations" in self.combination:
-            return self.incoming / self.combination["set_operations"]
-        else:
-            return None
+        return self.incoming / self.combination.get("file", None)
 
     @classmethod
     def get_comparison_methods(cls):
-        module = sys.modules["mbf_comparisons.methods"]
+        module = sys.modules["comparisons.methods"]
         ret = {}
         for name, obj in inspect.getmembers(module):
             if inspect.isclass(obj):
@@ -129,16 +137,23 @@ class Analysis:
         self.comparisons_to_do = self.parse_comparisons()
 
     def set_genome(self):
-        self._genome = mbf_genomes.EnsemblGenome(
-            self.alignment["species"], self.alignment["revision"]
-        )
+        if self.alignment["species"] == "Mus_musculus":
+            self._genome = genomes.Mus_musculus(self.alignment["revision"])
+        elif self.alignment["species"] == "Homo_sapiens":
+            self._genome = genomes.Homo_sapiens(self.alignment["revision"])
+        else:
+            try:
+                self._genome = genomes.EnsemblGenome(
+                    self.alignment["species"], self.alignment["revision"]
+                )
+            except:
+                raise
 
     def parse_single_comparisons(
-        self, comparison_group: str, method_name: str, comparison_type: str
+        self, comparison_group: str, method_name: str, comparison_type: str, path: str
     ):
         comparisons_to_do = {}
         seen = set()
-        path = self.comparison[comparison_group][method_name]["path"]
         df_in = pd.read_csv(path, sep="\t")
         method, options = self.comparison_method(comparison_group, method_name)
         for _, row in df_in.iterrows():
@@ -218,18 +233,20 @@ class Analysis:
         comparisons_to_do = {}
         for group in self.comparison:
             comparisons_to_do[group] = {}
-            for method_name in self.comparison[group]:
-                comp_type = self.comparison[group][method_name]["type"]
-                if comp_type == "ab":
-                    comparisons_to_do[group].update(
-                        self.parse_single_comparisons(group, method_name, comp_type)
-                    )
-                elif comp_type == "multi":
-                    comparisons_to_do[group].update(
-                        self.parse_multi_comparisons(group, method_name, comp_type)
-                    )
-                else:
-                    raise ValueError(f"Don't know what to do with type {comp_type}.")
+            method = self.comparison[group].get("method", "DESeq2Unpaired")
+            comp_type = self.comparison[group].get("type", "ab")
+            group_file = self.comparison[group].get("file", f"{group}.tsv")
+            group_path = self.incoming / group_file
+            if comp_type == "ab":
+                comparisons_to_do[group].update(
+                    self.parse_single_comparisons(group, method, comp_type, group_path)
+                )
+            elif comp_type == "multi":
+                comparisons_to_do[group].update(
+                    self.parse_multi_comparisons(group, method, comp_type, group_path)
+                )
+            else:
+                raise ValueError(f"Don't know what to do with type {comp_type}.")
         return comparisons_to_do
 
     def _verify(self):
@@ -305,11 +322,11 @@ class Analysis:
         """
         return self._genome
 
-    def aligner(self) -> ExternalAlgorithm:
+    def aligner(self) -> Aligner:
         """
         Returns an instance of the specified aligner and parameters for the run.
 
-        This looks up the aligner classes in mbf_externals.aligners and returns
+        This looks up the aligner classes in externals.aligners and returns
         an instance of the specified aligner, if such a class exists.
 
         Returns
@@ -324,10 +341,10 @@ class Analysis:
         ValueError
             If the aligner name does not match to a Class in the module.
         """
-        module = sys.modules["mbf_externals.aligners"]
+        module = sys.modules["mbf.externals.aligners"]
         aligner_name = self.alignment["aligner"]
         if not hasattr(module, aligner_name):
-            raise ValueError(f"No aligner named {aligner_name} found in mbf_externals.aligners.py.")
+            raise ValueError(f"No aligner named {aligner_name} found in mbf.externals.aligners.py.")
         aligner_ = getattr(module, aligner_name)
         aligner = aligner_()
         params = {}
@@ -414,16 +431,41 @@ class Analysis:
         Returns
         -------
         Any
-            mbf_align.fastq2. class instance.
+            align.fastq2. class instance.
         """
         kit = self.samples["kit"]
         if kit == "QuantSeq":
-            fastq_processor = mbf_align.fastq2.UMIExtractAndTrim(
+            fastq_processor = align.fastq2.UMIExtractAndTrim(
                 umi_length=6, cut_5_prime=4, cut_3_prime=0
             )
             return fastq_processor
         elif kit == "NextSeq":
-            return mbf_align.fastq2.Straight()
+            return align.fastq2.Straight()
+        else:
+            raise NotImplementedError  # TODO: read processor from toml for more fine-grained control
+
+    def post_processor(self) -> Any:
+        """
+        Returns an appropriate post_processor for an aligned lane.
+
+        This is based on the kit provided in the run.toml.
+
+        Returns
+        -------
+        Any
+            align.fastq2. class instance.
+
+        Raises
+        ------
+        NotImplementedError
+            For different kits.
+        """
+        kit = self.samples["kit"]
+        if kit == "QuantSeq":
+            post_processor = align.post_process.UmiTools_Dedup()
+            return post_processor
+        elif kit == "NextSeq":
+            return None
         else:
             raise NotImplementedError  # TODO: read processor from toml for more fine-grained control
 
@@ -432,12 +474,12 @@ class Analysis:
         stranded = self.samples["stranded"]
         if kit == "QuantSeq":
             if stranded:
-                return mbf_genomics.genes.anno_tag_counts.ExonSmartStrandedRust
+                return genomics.genes.anno_tag_counts.ExonSmartStrandedRust
             else:
                 raise NotImplementedError
         elif kit == "NextSeq":
             if stranded:
-                return mbf_genomics.genes.anno_tag_counts.ExonSmartStrandedRust
+                return genomics.genes.anno_tag_counts.ExonSmartStrandedRust
             else:
                 raise NotImplementedError
         else:
@@ -448,9 +490,9 @@ class Analysis:
         stranded = self.samples["stranded"]
         if stranded:
             if kit == "QuantSeq":
-                return mbf_genomics.genes.anno_tag_counts.NormalizationCPM
+                return genomics.genes.anno_tag_counts.NormalizationCPM
             elif kit == "NextSeq":
-                return mbf_genomics.genes.anno_tag_counts.NormalizationTPM
+                return genomics.genes.anno_tag_counts.NormalizationTPM
             else:
                 raise NotImplementedError  # TODO: to toml for more fine-grained control
         else:
@@ -525,8 +567,8 @@ class Analysis:
         """
         Returns an instance of a comparison method.
 
-        This is intended as a parameter for mbf_comparisons.Comparison.__init__.
-        This looks up the method classes in mbf_comparions.methods and returns
+        This is intended as a parameter for comparisons.Comparison.__init__.
+        This looks up the method classes in comparions.methods and returns
         an instance of the specified method, if such a class exists.
         Optional paramaters can be specified in run.toml with 'parameter' key.
 
@@ -538,25 +580,25 @@ class Analysis:
         Returns
         -------
         Any
-            A class from mbf_comparisons.methods.
+            A class from comparisons.methods.
 
         Raises
         ------
         ValueError
             If the method is not found in the module.
         """
-        module = sys.modules["mbf_comparisons.methods"]
+        module = sys.modules["mbf.comparisons.methods"]
         if not hasattr(module, method):
-            raise ValueError(f"No method named {method} found in mbf_comparisons.methods.py.")
+            raise ValueError(f"No method named {method} found in comparisons.methods.py.")
         method_ = getattr(module, method)
         options = {
-            "laplace_offset": self.comparison[group_name][method].get("laplace_offset", 0),
-            "include_other_samples_for_variance": self.comparison[group_name][method].get(
+            "laplace_offset": self.comparison[group_name].get("laplace_offset", 0),
+            "include_other_samples_for_variance": self.comparison[group_name].get(
                 "include_other_samples_for_variance", True
             ),
         }
-        if "parameters" in self.comparison[group_name][method]:
-            parameters = self.comparison[group_name][method]["parameters"]
+        if "parameters" in self.comparison[group_name]:
+            parameters = self.comparison[group_name]["parameters"]
             return method_(**parameters), options
         else:
             return method_(), options
@@ -823,26 +865,24 @@ class Analysis:
                     factors = ",".join([f"{x}({y})" for x, y in params["factor_reference"].items()])
                     desc = f"- compare {comparison_name} with {factors} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
                     report_header += desc
-        report_header += f"\n### Downstream Analysis  \n"
-        for downstream in self.downstream:
-            if downstream == "pathway_analysis":
-                for pathway_method in self.downstream[downstream]:
-                    if pathway_method == "ora":
-                        collections = ["h"]
-                        if "collections" in self.downstream[downstream][pathway_method]:
-                            collections = self.downstream[downstream][pathway_method]["collections"]
-                        report_header += f"\nOver-Representation Analysis (ORA)  \n"
-                        report_header += f"Collections used: {collections}  \n"
-                    if pathway_method == "gsea":
-                        collections = ["h"]
-                        if "collections" in self.downstream[downstream][pathway_method]:
-                            collections = self.downstream[downstream][pathway_method]["collections"]
-                        parameter = {"permutations": 1000}
-                        if "parameter" in self.downstream[downstream][pathway_method]:
-                            parameter = self.downstream[downstream][pathway_method]["parameter"]
-                        report_header += "\nGene Set Enrichment Analysis (GSEA)  \n"
-                        report_header += f"Collections: {collections}  \n"
-                        report_header += f"Parameters: {parameter}  \n"
+        report_header += f"\n### Pathway Analysis  \n"
+        for pathway_method in self.pathway_analysis:
+            if pathway_method == "ora":
+                collections = ["h"]
+                if "collections" in self.pathway_analysis[pathway_method]:
+                    collections = self.pathway_analysis[pathway_method]["collections"]
+                report_header += f"\nOver-Representation Analysis (ORA)  \n"
+                report_header += f"Collections used: {collections}  \n"
+            if pathway_method == "gsea":
+                collections = ["h"]
+                if "collections" in self.pathway_analysis[pathway_method]:
+                    collections = self.pathway_analysis[pathway_method]["collections"]
+                parameter = {"permutations": 1000}
+                if "parameter" in self.pathway_analysis[pathway_method]:
+                    parameter = self.pathway_analysis[pathway_method]["parameter"]
+                report_header += "\nGene Set Enrichment Analysis (GSEA)  \n"
+                report_header += f"Collections: {collections}  \n"
+                report_header += f"Parameters: {parameter}  \n"
         combination_df = self.combination_df()
         if combination_df is not None:
             report_header += f"\n### Set operations on comparisons  \n"
@@ -865,7 +905,7 @@ class Analysis:
                     operations = "Set difference"
 
                     def generator(new_name, genes_to_combine):
-                        return mbf_genomics.genes.genes_from.FromDifference(
+                        return genomics.genes.genes_from.FromDifference(
                             new_name,
                             genes_to_combine[0],
                             genes_to_combine[1:],
@@ -876,7 +916,7 @@ class Analysis:
                     operations = "Intersection"
 
                     def generator(new_name, genes_to_combine):
-                        return mbf_genomics.genes.genes_from.FromIntersection(
+                        return genomics.genes.genes_from.FromIntersection(
                             new_name, genes_to_combine, sheet_name="Intersections"
                         )
 
@@ -884,14 +924,14 @@ class Analysis:
                     operations = "Union"
 
                     def generator(new_name, genes_to_combine):
-                        return mbf_genomics.genes.genes_from.FromAny(
+                        return genomics.genes.genes_from.FromAny(
                             new_name, genes_to_combine, sheet_name="Unions"
                         )
 
                 yield condition_group, new_name_prefix, comparisons_to_add, generator, operations
 
     def get_fastqs(self):
-        fill_incoming(self.run_ids)
+        fill_incoming(self.run_ids, self.runs_folder, self.incoming)
 
 
 def analysis(req_file: Path = Path("run.toml")) -> Analysis:
