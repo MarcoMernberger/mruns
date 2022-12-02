@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
 
 from pathlib import Path
+from pandas import DataFrame
 import pytest
 import mbf
 import mock
 import unittest
+from mruns.base import Analysis
+
 
 __author__ = "Marco Mernberger"
 __copyright__ = "Marco Mernberger"
@@ -68,3 +71,120 @@ def test_set_genome(ana_pypipe):
     assert hasattr(ana_pypipe, "genome")
     assert ana.genome.species == "Homo_sapiens"
     assert ana.genome.revision == "98"
+    mouse = {"species": "Mus_musculus", "revision": 98, "aligner": "STAR"}
+    ana2 = Analysis(
+        "",
+        ana.project,
+        ana.samples,
+        mouse,
+        ana.genes,
+        ana.comparison,
+        ana.pathway_analysis,
+        ana.reports,
+        None,
+    )
+    assert ana2.genome.species == "Mus_musculus"
+    assert ana2.genome.revision == "98"
+    rat = {"species": "Rattus_norvegicus", "revision": 98, "aligner": "STAR"}
+    ana2 = Analysis(
+        "",
+        ana.project,
+        ana.samples,
+        rat,
+        ana.genes,
+        ana.comparison,
+        ana.pathway_analysis,
+        ana.reports,
+        None,
+    )
+    assert ana2.genome.species == "Rattus_norvegicus"
+    with pytest.raises(ValueError):
+        fail = {"species": "Biggusdickus", "revision": 98, "aligner": "STAR"}
+        ana3 = Analysis(
+            "",
+            ana.project,
+            ana.samples,
+            fail,
+            ana.genes,
+            ana.comparison,
+            ana.pathway_analysis,
+            ana.reports,
+            None,
+        )
+        ana3.set_genome()
+        assert ana3.genome.species == "Biggusdickus"
+
+
+def test_verfiy(ana):
+    ana.samples["kit"] = "None"
+    with pytest.raises(ValueError):
+        ana._verify()
+    ana.samples["df_samples"] = "notfound"
+    with pytest.raises(FileNotFoundError):
+        ana._verify()
+    ana.project["run_ids"] = ["notfound"]
+    with pytest.raises(FileNotFoundError):
+        ana._verify()
+    with pytest.raises(ValueError):
+        del ana.project["analysis_type"]
+        ana._verify()
+    with pytest.raises(ValueError):
+        del ana.project
+        ana._verify()
+
+
+@pytest.mark.usefixtures("new_pipegraph_no_qc")
+def test_in_pypipegraph(ana_pypipe):
+    with mock.patch.object(
+        mbf.externals.ExternalAlgorithm, "get_version_cached", new=lambda *args: "mocked"
+    ):
+        assert ana_pypipe.aligner()[1] == {}
+
+
+def test_aligner(ana):
+    with mock.patch.object(
+        mbf.externals.ExternalAlgorithm, "get_version_cached", new=lambda *args: "mocked"
+    ):
+        assert ana.aligner()[1]["some"] == "parameter"
+        ana.alignment["aligner"] = "None"
+        with pytest.raises(ValueError):
+            ana.aligner()
+
+
+def test_combination_df(ana):
+    assert isinstance(ana.combination_df(), DataFrame)
+    del ana.combination["file"]
+    assert ana.combination_df() is None
+
+
+def test_verify_samples(ana):
+    df = DataFrame(
+        {
+            "number": [1, 2],
+            "sample": ["s1", "s2"],
+            "comment": ["", ""],
+            "prefix": ["a", "a"],
+            "ABpairs": ["ABpairs", "ABpairs"],
+            "vid": ["MM01", "MM02"],
+        }
+    )
+    
+    with mock.patch.object(pandas, "read_csv", new=lambda *args: df):
+        with pytest.raises(ValueError) as info:
+            ana.verify_samples()
+            assert "The groups table" in str(info)
+    del df["ABPairs"]
+    with mock.patch.object(ana, "sample_df", new=lambda *args: df):
+        with pytest.raises(FileNotFoundError) as info:
+            ana.verify_samples()
+
+
+
+    with mock.patch.object(ana, "sample_df", new=lambda *args: df):
+        with pytest.raises(ValueError) as info:
+            ana.verify_samples()
+            assert "vids where assigned twice" in str(info)
+    with mock.patch.object(ana, "sample_df", new=lambda *args: DataFrame({"a": [123]})):
+        with pytest.raises(ValueError) as info:
+
+            ana.verify_samples()

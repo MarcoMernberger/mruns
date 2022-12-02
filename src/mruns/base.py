@@ -67,7 +67,7 @@ class Analysis:
     combination: Dict[str, Any]
     __allowed_types: ClassVar[List[str]] = ["RNAseq"]
     __known_kits: ClassVar[List[str]] = ["QuantSeq", "NextSeq"]
-    __accepted_species: ClassVar[List[str]] = ["Homo_sapiens", "Mus_musculus"]
+    # __accepted_species: ClassVar[List[str]] = ["Homo_sapiens", "Mus_musculus"]
 
     @property
     def incoming(self):
@@ -114,7 +114,10 @@ class Analysis:
 
     @property
     def path_to_combination_df(self):
-        return self.incoming / self.combination.get("file", None)
+        filename = self.combination.get("file", None)
+        if filename is None:
+            return None
+        return self.incoming / filename
 
     # @classmethod
     # def get_comparison_methods(cls):
@@ -302,10 +305,10 @@ class Analysis:
                 f"Provided kit {kit} is not known, currently supported are {str(self.__known_kits)}."
             )
         # check alignment
-        species = self.alignment["species"]
-        if species not in self.__accepted_species:
-            # for some donwstream analysis we can only handle mouse and human automatically
-            raise ValueError(f"Provided species {species} not in {str(self.__accepted_species)}.")
+        # species = self.alignment["species"]
+        # if species not in self.__accepted_species:
+        #     # for some donwstream analysis we can only handle mouse and human automatically
+        #     raise ValueError(f"Provided species {species} not in {str(self.__accepted_species)}.")
 
     @property
     def genome(self) -> EnsemblGenome:
@@ -350,7 +353,7 @@ class Analysis:
         params = {}
         if "parameters" in self.alignment:
             params = self.alignment["parameters"]
-        return aligner, params
+        return aligner, dict(params)
 
     def sample_df(self) -> DataFrame:
         """
@@ -401,12 +404,12 @@ class Analysis:
         duplicate_vids = vids[vids.duplicated()].values
         if len(duplicate_vids) > 0:
             raise ValueError(f"The following vids where assigned twice: {list(duplicate_vids)}.")
-        for c in df_samples.columns:
-            if c.startswith("group"):
-                group_columns.append(c)
+        for group in self.comparison:
+            if group in df_samples.columns:
+                group_columns.append(group)
         if len(group_columns) == 0:
             raise ValueError(
-                f"No column starting with 'group' in {self.path_to_samples_df}. This is needed to define groups for comparisons."
+                f"No grouping column found in {self.path_to_samples_df}. This is needed to define groups for comparisons."
             )
         for col in group_columns:
             fpath = self.incoming / f"{col}.tsv"
