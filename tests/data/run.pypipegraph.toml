@@ -112,4 +112,4 @@ collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
 collections = ["c6", "c7", "c2", "c5", "h", "ipa"]
 
 [reports]
-name = "run_report"
+name = "report"

@@ -514,7 +514,6 @@ class Analysis:
             ppg.FunctionInvariant("FI_ana", self.summary_markdown),
             ppg.FunctionInvariant("FI_ana", self.summary_markdown),
         ]
-
         if "name" in self.reports:
             nb = NB(self.reports["name"], dependencies=dependencies)
         else:
@@ -606,7 +605,7 @@ class Analysis:
         else:
             return method_(), options
 
-    def deg_filter_expressions(self, condition_group: str, method: str) -> List[Any]:
+    def deg_filter_expressions(self, comparison_group: str) -> List[Any]:
         """
         Returns the filter expression used to filter the DE genes after runnning
         the comparison.
@@ -615,8 +614,8 @@ class Analysis:
 
         Parameters
         ----------
-        method : str
-            The method for which the expression is used.
+        comparison_group : str
+            The comparison for which the expression is used.
 
         Returns
         -------
@@ -624,7 +623,7 @@ class Analysis:
             List of filter expressions.
         """
         default = [[["FDR", "<=", 0.05], ["log2FC", "|>", 1]]]
-        if "filter_expressions" in self.comparison[condition_group][method]:
+        if "filter_expressions" in self.comparison[condition_group]:
             expr = self.comparison[condition_group][method]["filter_expressions"]
             return expr
         else:

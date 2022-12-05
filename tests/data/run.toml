@@ -15,7 +15,7 @@ stranded = true
 species = "Homo_sapiens"
 revision = 98
 aligner = "STAR"
-parameters = [["some",  "parameter"]]
+parameters = [["some", "parameter"]]
 
 [genes.filter]
 canonical = true

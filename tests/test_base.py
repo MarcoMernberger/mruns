@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 
 from pathlib import Path
+import pandas
 from pandas import DataFrame
+from mbf import align, genomics
 import pytest
 import mbf
 import mock
 import unittest
+import mreports
 from mruns.base import Analysis
-
+from mruns import util
 
 __author__ = "Marco Mernberger"
 __copyright__ = "Marco Mernberger"
@@ -164,27 +167,135 @@ def test_verify_samples(ana):
             "sample": ["s1", "s2"],
             "comment": ["", ""],
             "prefix": ["a", "a"],
-            "ABpairs": ["ABpairs", "ABpairs"],
+            "ABpairs": ["groupA", "groupB"],
             "vid": ["MM01", "MM02"],
         }
     )
-    
-    with mock.patch.object(pandas, "read_csv", new=lambda *args: df):
+
+    with mock.patch.object(pandas, "read_csv", new=lambda *__, **_: df):
         with pytest.raises(ValueError) as info:
             ana.verify_samples()
-            assert "The groups table" in str(info)
-    del df["ABPairs"]
+            assert "does not contain the following required columns" in str(info)
+    df["nonexistent"] = df["ABpairs"].values
+    ana.comparison["nonexistent"] = {"file": "group_nonexistent.tsv"}
     with mock.patch.object(ana, "sample_df", new=lambda *args: df):
         with pytest.raises(FileNotFoundError) as info:
             ana.verify_samples()
-
-
-
+        assert "specified, but no file" in str(info)
+    del df["nonexistent"]
+    del df["ABpairs"]
+    with pytest.raises(ValueError) as info:
+        with mock.patch.object(ana, "sample_df", new=lambda *args: df):
+            ana.verify_samples()
+            assert "No grouping column found in" in str(info)
+    df["vid"] = ["MM01", "MM01"]
     with mock.patch.object(ana, "sample_df", new=lambda *args: df):
         with pytest.raises(ValueError) as info:
             ana.verify_samples()
-            assert "vids where assigned twice" in str(info)
+        assert "vids where assigned twice" in str(info)
     with mock.patch.object(ana, "sample_df", new=lambda *args: DataFrame({"a": [123]})):
         with pytest.raises(ValueError) as info:
-
             ana.verify_samples()
+            assert "oes not contain the following required columns" in str(info)
+
+
+def fastq_processor(ana):
+    processor = ana.fastq_processor()
+    assert isinstance(processor, align.fastq2.UMIExtractAndTrim)
+    ana.samples["kit"] = "NextSeq"
+    processor = ana.fastq_processor()
+    assert isinstance(processor, align.fastq2.Straight)
+    ana.samples["kit"] = "Unknown kit"
+    with pytest.raises(NotImplementedError):
+        ana.fastq_processor()
+
+
+def test_post_processor(ana):
+    processor = ana.post_processor()
+    assert isinstance(processor, align.post_process.UmiTools_Dedup)
+    ana.samples["kit"] = "NextSeq"
+    processor = ana.post_processor()
+    assert processor is None
+    ana.samples["kit"] = "Unknown kit"
+    with pytest.raises(NotImplementedError):
+        ana.fastq_processor()
+
+
+def test_raw_counter(ana):
+    counter = ana.raw_counter()
+    assert "genomics.genes.anno_tag_counts.ExonSmartStrandedRust" in str(counter)
+    ana.samples["stranded"] = False
+    with pytest.raises(NotImplementedError):
+        ana.samples["stranded"] = False
+        ana.raw_counter()
+    ana.samples["kit"] = "NextSeq"
+    ana.samples["stranded"] = True
+    counter = ana.raw_counter()
+    assert "genomics.genes.anno_tag_counts.ExonSmartStrandedRust" in str(counter)
+    with pytest.raises(NotImplementedError):
+        ana.samples["stranded"] = False
+        ana.raw_counter()
+    with pytest.raises(NotImplementedError):
+        ana.samples["kit"] = "Unknown"
+        ana.samples["stranded"] = True
+        ana.raw_counter()
+
+
+def test_norm_counter(ana):
+    with pytest.raises(NotImplementedError):
+        ana.samples["stranded"] = False
+        ana.norm_counter()
+    ana.samples["stranded"] = True
+    counter = ana.norm_counter()
+    assert "genomics.genes.anno_tag_counts.NormalizationCPM" in str(counter)
+    ana.samples["kit"] = "NextSeq"
+    counter = ana.norm_counter()
+    assert "genomics.genes.anno_tag_counts.NormalizationTPM" in str(counter)
+    with pytest.raises(NotImplementedError):
+        ana.samples["kit"] = "Unknown"
+        ana.norm_counter()
+
+
+@pytest.mark.usefixtures("new_pipegraph_no_qc")
+def test_report(ana_pypipe):
+    report = ana_pypipe.report()
+    assert isinstance(report, mreports.NB)
+    assert report.name == "report"
+    del ana_pypipe.reports["name"]
+    report = ana_pypipe.report()
+    assert report.name == "run_report"
+
+
+def test_has_gene_filter_specified(ana):
+    assert ana.has_gene_filter_specified()
+
+
+def test_genes_filter(ana):
+    with mock.patch.object(ana._genome, "get_true_chromosomes", new=lambda *args: [1, 2, 3]):
+        assert callable(ana.genes_filter())
+        ana.genes["filter"]["canonical"] = False
+        assert callable(ana.genes_filter())
+        ana.has_gene_filter_specified = lambda *_: False
+        with pytest.raises(ValueError):
+            ana.genes_filter()
+
+
+def test_comparison_method(ana):
+    deseq, params = ana.comparison_method(group_name="ABpairs", method="DESeq2Unpaired")
+    assert isinstance(deseq, mbf.comparisons.methods.DESeq2Unpaired)
+    assert isinstance(params, dict)
+    with pytest.raises(ValueError):
+        ana.comparison_method(group_name="ABpairs", method="Nomethod")
+
+
+def test_deg_filter_expressions(ana):
+    print(ana.comparison["ABpairs"])
+    exprs = ana.deg_filter_expressions("ABpairs", "DESeq2Unpaired")
+    default = [[["FDR", "<=", 0.05], ["log2FC", "|>", 1]]]
+    assert exprs == [
+        [["FDR", "<=", 0.05], ["log2FC", "|>", 1]],
+        [["FDR", "<=", 0.05], ["log2FC", ">=", 1]],
+        [["FDR", "<=", 0.05], ["log2FC", "<=", 1]],
+    ]
+    del ana.comparison["ABpairs"]["DESeq2Unpaired"]
+    assert exprs == default
