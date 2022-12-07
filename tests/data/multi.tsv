@@ -1,0 +1,17 @@
+interaction	main_factor	comparison_group	comparison	group	treatment:untr	genotype:WT	comment
+genotype:treatment	treatment	group	12h	WT_untr	untr	WT	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	12h	WT_12h	12h	WT	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	12h	RR_untr	untr	RR	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	12h	RR_12h	12h	RR	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	12h	EE_untr	untr	EE	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	12h	EE_12h	12h	EE	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	12h	KO_untr	untr	KO	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	12h	KO_12h	12h	KO	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	24h	WT_untr	untr	WT	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	24h	WT_24h	24h	WT	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	24h	RR_untr	untr	RR	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	24h	RR_24h	24h	RR	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	24h	EE_untr	untr	EE	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	24h	EE_24h	24h	EE	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	24h	KO_untr	untr	KO	multi-factor design for 12h treatment
+genotype:treatment	treatment	group	24h	KO_24h	24h	KO	multi-factor design for 12h treatment

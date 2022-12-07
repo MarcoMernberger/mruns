@@ -230,15 +230,25 @@ class Analysis:
     def parse_multi_comparisons(
         self, comparison_group: str, method_name: str, comparison_type: str
     ):
-        df_factor_path = self.comparison[comparison_group][method_name]["path"]
+        df_factor_path = self.filepath_from_incoming(self.comparison[comparison_group]["file"])
         multi_comparisons_to_do = {}
         df_factor = pd.read_csv(df_factor_path, sep="\t")
+        method_name = self.comparison_method_name(self.comparison[comparison_group])
         method, options = self.comparison_method(comparison_group, method_name)
+
         for multi_group, df_factor_group in df_factor.groupby("comparison_group"):
+            # so like group ... why did i do this?
+            # multi_comp_name = comparison_name
             for multi_comp_name, df_comp in df_factor_group.groupby("comparison"):
                 main_factor = df_comp["main"].values[0]
                 comparison_name = f"{multi_comp_name}({method_name})"
-                assert len(df_comp["main"].unique()) == 1
+                try:
+                    assert len(df_comp["main_factor"].unique()) == 1
+                except AssertionError:
+                    print(
+                        f"Multiple values for main factor given in {df_factor_path}: {df_comp['main_factor'].unique()}"
+                    )
+
                 interactions = None
                 if "interaction" in df_comp.columns:
                     interactions = df_comp["interaction"].values[0]
@@ -715,7 +725,7 @@ class Analysis:
 
     def display_summary(self):
         """
-        Displays the summyry of analysis on console.
+        Displays the summary of analysis on console.
         """
         md = self.summary_markdown()
         console.print(Markdown(md))
@@ -732,15 +742,6 @@ class Analysis:
         str
             Summary of run settings.
         """
-
-        def __comp_header(comp_type):
-            if comp_type == "ab":
-                return "Comparisons pairwise: \n"
-            elif comp_type == "multi":
-                return "Comparisons multi-factor: \n"
-            else:
-                raise ValueError(f"Don't know what to do with comparison type {comp_type}.")
-
         pp = PrettyPrinter(indent=4)
         report_header = f"## Analysis from toml file '{self.run_toml}'\n"
         genome_name = self.genome.name if hasattr(self, "genome") else "not set!"

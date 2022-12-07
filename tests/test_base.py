@@ -323,6 +323,13 @@ def test_summary_markdown(ana_pypipe):
         md = ana_pypipe.summary_markdown()
         assert isinstance(md, str)
         assert "Set operations on comparisons" not in md
+        ana_pypipe.comparison["ABpairs"]["type"] = "multi"
+        md = ana_pypipe.summary_markdown()
+        assert "(multi)" in md
+        with pytest.raises(ValueError) as info:
+            ana_pypipe.comparison["ABpairs"]["type"] = "notype"
+            md = ana_pypipe.summary_markdown()
+            assert "Don't know what to do with type notype." in str(info)
 
 
 def test_incoming(ana):
@@ -373,3 +380,34 @@ def test_parse_single_comparisons(ana):
     with mock.patch.object(pandas, "read_csv", lambda *_, **__: df):
         with pytest.raises(ValueError):
             ana.parse_single_comparisons("ABpairs", "DESeq2Unpaired", "ab", "mockpath")
+
+
+def test_parse_comparisons(ana):
+    comp_type = "this is no type"
+    ana.comparison["ABpairs"]["type"] = comp_type
+    with pytest.raises(ValueError) as info:
+        ana.parse_comparisons()
+        print(str(info))
+        assert f"Don't know what to do with type {comp_type}." in str(info)
+    ana.comparison["ABpairs"]["type"] = "multi"
+    with mock.patch.object(
+        ana,
+        "parse_multi_comparisons",
+        lambda *_, **__: {"msg": "parse_multi_comparisons called"},
+    ):
+        comparisons_to_do = ana.parse_comparisons()
+        assert comparisons_to_do["ABpairs"]["msg"] == "parse_multi_comparisons called"
+
+
+@pytest.mark.usefixtures("new_pipegraph_no_qc")
+def test_console_print(ana_pypipe):
+    with mock.patch.object(
+        mbf.externals.ExternalAlgorithm, "get_version_cached", new=lambda *args: "mocked"
+    ):
+        ana_pypipe.display_summary()
+    # with mock.patch.object(console, "print", lambda *args: args):
+    #     """
+    #     Displays the summary of analysis on console.
+    #     """
+    #     md = self.summary_markdown()
+    #     console.print(Markdown(md))

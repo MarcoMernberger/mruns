@@ -100,6 +100,94 @@ parameters = {}
 # include_other_samples_for_variance = true # default
 
 
+#########this is multi
+# [comparison.Multi]
+# type = "multi"
+
+# method = "DESeq2MultiFactor"
+
+# file = "multi.tsv"
+
+# filter_expressions = 
+# 12h = [
+#     [
+#         [
+#             "12h:untr(treatment) effect for WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "12h:untr(treatment) effect for WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+#     [
+#         [
+#             "12h:untr(treatment) effect for RR:WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "12h:untr(treatment) effect for RR:WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+#     [
+#         [
+#             "12h:untr(treatment) effect difference for RR:WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "12h:untr(treatment) effect difference for RR:WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+# ]
+# 24h = [
+#     [
+#         [
+#             "24h:untr(treatment) effect for WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "24h:untr(treatment) effect for WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+#     [
+#         [
+#             "24h:untr(treatment) effect for RR:WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "24h:untr(treatment) effect for RR:WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+#     [
+#         [
+#             "24h:untr(treatment) effect difference for RR:WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "24h:untr(treatment) effect difference for RR:WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+# ]
+#########this is multi
+
+
 [combination]
 # put combinations of gene lists/comparisons here
 file = "combinations.tsv"

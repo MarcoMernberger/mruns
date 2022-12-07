@@ -8,7 +8,7 @@ main_incoming = "../../data/"
 [samples]
 df_samples = "samples.tsv"
 reverse_reads = false
-kit = "QuantSeq"           #fastq_processor="UMIExtractAndTrim"
+kit = "NextSeq"            #fastq_processor="UMIExtractAndTrim"
 stranded = true
 
 [alignment]
