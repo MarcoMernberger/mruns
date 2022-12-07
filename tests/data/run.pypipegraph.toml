@@ -93,7 +93,7 @@ filter_expressions = [
 ]
 
 # put parameters for the method instantiation here
-parameters = {}
+# parameters = {}
 
 # laplace_offset = 0 # default
 # include_other_samples_for_variance = true # default
@@ -109,7 +109,8 @@ file = "combinations.tsv"
 collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
 
 [pathway_analysis.gsea]
-collections = ["c6", "c7", "c2", "c5", "h", "ipa"]
+parameters = [["permutation", 1000]]
 
+collections = ["c6", "c7", "c2", "c5", "h", "ipa"]
 [reports]
 name = "report"

@@ -1,3 +1,4 @@
 a	b	comparison_name	comment
-condA	condB	"A vs B"	What effect does A have on cells over B?
-condB	condC	"B vs C"	What effect does B have on cells over C?
+condA	condB	A_vs_B	What effect does A have on cells over B?
+condA	condC	A_vs_C	What effect does A have on cells over C?
+condB	condC	B_vs_C	What effect does B have on cells over C?

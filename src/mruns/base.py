@@ -15,7 +15,8 @@ from mbf import comparisons
 from mbf.genomes import EnsemblGenome, Homo_sapiens, Mus_musculus
 from mbf.externals.aligners.base import Aligner
 from mbf.genomics.genes.anno_tag_counts import _NormalizationAnno, _FastTagCounter
-
+from rich.markdown import Markdown
+from rich.console import Console
 from pandas import DataFrame
 from .util import (
     filter_function,
@@ -25,7 +26,6 @@ from .util import (
     assert_uniqueness,
 )
 from pprint import PrettyPrinter
-
 import dataclasses
 import pandas as pd
 import pypipegraph as ppg
@@ -42,7 +42,7 @@ __license__ = "mit"
 
 
 _logger = logging.getLogger(__name__)
-
+console = Console()
 
 _required_fields = {
     "project": ["name", "analysis_type", "run_ids"],
@@ -110,14 +110,50 @@ class Analysis:
 
     @property
     def path_to_samples_df(self):
-        return self.incoming / self.samples["df_samples"]
+        return self.filepath_from_incoming(self.samples["df_samples"])
 
     @property
     def path_to_combination_df(self):
         filename = self.combination.get("file", None)
         if filename is None:
             return None
-        return self.incoming / filename
+        return self.filepath_from_incoming(filename)
+
+    @classmethod
+    def comparison_method_name(cls, comparison_dict_from_toml: Dict) -> str:
+        """
+        Returns the name of the comparison method class for a DEG comparison.
+        If none is given, it sets a default value.
+
+        Parameters
+        ----------
+        comparison_dict_from_toml : Dict
+            Dict-like toml entry for comparison.
+
+        Returns
+        -------
+        str
+            Name of the comparison method.
+        """
+        return comparison_dict_from_toml.get("method", "DESeq2Unpaired")
+
+    @classmethod
+    def pathway_collections(cls, dict_pathway_analysis: Dict) -> List[str]:
+        """
+        Returns the collections for a pathway analysis.
+        If none is given, it sets a default value.
+
+        Parameters
+        ----------
+        dict_pathway_analysis : Dict
+            Dict-like toml entry for comparison.
+
+        Returns
+        -------
+        List[str]
+            List of collections to be used.
+        """
+        return list(dict_pathway_analysis.get("collections", ["h"]))
 
     # @classmethod
     # def get_comparison_methods(cls):
@@ -152,6 +188,22 @@ class Analysis:
             except:
                 raise
 
+    def filepath_from_incoming(self, filename: str) -> Path:
+        """
+        Returns a path for a file in incoming.
+
+        Parameters
+        ----------
+        filename : str
+            The filename.
+
+        Returns
+        -------
+        Path
+            Path to filename.
+        """
+        return self.incoming / filename
+
     def parse_single_comparisons(
         self, comparison_group: str, method_name: str, comparison_type: str, path: str
     ):
@@ -163,7 +215,7 @@ class Analysis:
             comparison_name = f"{row['comparison_name']}({method_name})"
             if comparison_name in seen:
                 raise ValueError("Duplicate comparison name  {comparison_name} in {path}.")
-
+            seen.add(comparison_name)
             comparisons_to_do[comparison_name] = {
                 "type": comparison_type,
                 "cond1": row["a"],
@@ -236,10 +288,10 @@ class Analysis:
         comparisons_to_do = {}
         for group in self.comparison:
             comparisons_to_do[group] = {}
-            method = self.comparison[group].get("method", "DESeq2Unpaired")
+            method = self.comparison_method_name(self.comparison[group])
             comp_type = self.comparison[group].get("type", "ab")
             group_file = self.comparison[group].get("file", f"{group}.tsv")
-            group_path = self.incoming / group_file
+            group_path = self.filepath_from_incoming(group_file)
             if comp_type == "ab":
                 comparisons_to_do[group].update(
                     self.parse_single_comparisons(group, method, comp_type, group_path)
@@ -292,7 +344,7 @@ class Analysis:
             raise NotImplementedError(f"{self.analysis_type} is not yet implemented.")
         # check run ids
         for run_id in self.run_ids:
-            if not (self.incoming / run_id).exists():
+            if not (self.filepath_from_incoming(run_id)).exists():
                 print(self.incoming.absolute())
                 raise FileNotFoundError(f"Folder {run_id} not present in '{str(self.incoming)}'.")
                 # TODO automatically pulling the data from rose/incoming ...
@@ -412,7 +464,7 @@ class Analysis:
                 f"No grouping column found in {self.path_to_samples_df}. This is needed to define groups for comparisons."
             )
         for col in group_columns:
-            fpath = self.incoming / f"{col}.tsv"
+            fpath = self.filepath_from_incoming(f"{col}.tsv")
             if not fpath.exists():
                 raise FileNotFoundError(
                     f"Group column {col} specified, but no file {str(fpath)} found."
@@ -622,9 +674,9 @@ class Analysis:
         List[Any]
             List of filter expressions.
         """
-        default = [[["FDR", "<=", 0.05], ["log2FC", "|>", 1]]]
-        if "filter_expressions" in self.comparison[condition_group]:
-            expr = self.comparison[condition_group][method]["filter_expressions"]
+        default = [[["FDR", "<=", "0.05"], ["log2FC", "|>", "1"]]]
+        if "filter_expressions" in self.comparison[comparison_group]:
+            expr = self.comparison[comparison_group]["filter_expressions"]
             return expr
         else:
             return default
@@ -659,128 +711,14 @@ class Analysis:
         """
         pp = PrettyPrinter(indent=4)
         d = vars(self).copy()
-        d["genome"] = d["_genome"]
-        del d["_genome"]
         return "Analysis(\n" + pp.pformat(d) + "\n)"
 
-    # def summary(self) -> str:
-    # """
-    # Generates a run report summary and returns it as string.
-    #
-    # This is intended for double checking the analysis settings and
-    # should countain all the information inferred from the run.toml.
-    #
-    # Returns
-    # -------
-    # str
-    # Summary of run settings.
-    # """
-    # pp = PrettyPrinter(indent=4)
-    # report_header = f"Analysis from toml file '{self.run_toml}'\n\n"
-    # report_header += "Specification\n-------------\n" + self.pretty() + "\n\n"
-    # report_header += f"Genome used: {self.genome.name}\n"
-    # aligner, aligner_params = self.aligner()
-    # report_header += (
-    # f"Aligner used: {aligner.name} with parameter {aligner_params}\n"
-    # )
-    # report_header += f"Run-IDs: {pp.pformat(self.run_ids)}\n"
-    # report_header += (
-    # f"Fastq-Processor: {self.fastq_processor().__class__.__name__}\n"
-    # )
-    # raw_counter = self.raw_counter()
-    # norm_counter = self.norm_counter()
-    # report_header += f"Raw counter: {raw_counter.__name__}\n"
-    # report_header += f"Norm counter: {norm_counter.__name__}\n"
-    # report_header += "\nSamples\n-------\n"
-    # df_samples = self.sample_df()
-    # report_header += pp.pformat(df_samples)
-    # conditions = [x for x in df_samples.columns if x.startswith("group")]
-    # report_header += "\n\nComparisons requested\n---------------------\n"
-    # comparisons_to_do: Dict[str, List] = {}
-    # for condition in conditions:
-    # comparisons_to_do[condition] = []
-    # df_in = pd.read_csv(f"incoming/{condition}.tsv", sep="\t")
-    # for _, row in df_in.iterrows():
-    # comparisons_to_do[condition].append(
-    # (row["a"], row["b"], row["comparison_name"])
-    # )
-    # report_header += f"Comparison group: '{condition}'\n"
-    # report_header += pp.pformat(df_in) + "\n"
-    # report_header += f"\nGenes\n-----\n"
-    # genes_used_name = f"Genes_{self.genome.name}"
-    # if self.has_gene_filter_specified():
-    # report_header += "Genes filtered prior to DE analysis by: \n"
-    # if (
-    # "canonical" in self.genes["filter"]
-    # and self.genes["filter"]["canonical"]
-    # ):
-    # report_header += "- canonical chromosomes only\n"
-    # genes_used_name += "_canonical"
-    # if "biotypes" in self.genes["filter"]:
-    # at_least = self.genes["filter"].get("at_least", 1)
-    # report_header += (
-    # f"- biotype in {pp.pformat(self.genes['filter']['biotypes'])}\n"
-    # )
-    # genes_used_name += "_biotypes"
-    # if "cpm_threshold" in self.genes["filter"]:
-    # threshold = self.genes["filter"]["cpm_threshold"]
-    # report_header += f"- at least {at_least} samples with normalized expression >= {threshold}\n"
-    # genes_used_name += f"_{at_least}samples>={threshold}"
-    # report_header += f"Genes used: {genes_used_name}\n"
-    # report_header += f"\nComparisons\n-----------\n"
-    # for condition_group in self.comparison:
-    # report_header += f"From '{condition_group}':\n"
-    #     comp_type = self.comparison[condition_group]["type"]
-    #     if comp_type == "ab":
-    #         for comparison_name in self.comparisons_to_do[condition_group]:
-    #             params = self.comparisons_to_do[condition_group][comparison_name]
-    #             if params["options"]["include_other_samples_for_variance"]:
-    #                 x = "fit on all samples"
-    #             else:
-    #                 x = "fit on conditions"
-    #             desc = f"- compare {params['cond1']} vs {params['cond2']} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
-    #             report_header += desc
-    #     else:
-    #         for comparison_name in self.comparisons_to_do[condition_group]:
-    #             params = self.comparisons_to_do[condition_group][comparison_name]
-    #             factors = ",".join(
-    #                 [f"{x}({y})" for x, y in params["factor_reference"].items()]
-    #             )
-    #             desc = f"- compare {comparison_name} with {factors} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
-    #             report_header += desc
-    # report_header += f"\nDownstream Analysis\n-------------------\n"
-    # for downstream in self.downstream:
-    #     if downstream == "pathway_analysis":
-    #         for pathway_method in self.downstream[downstream]:
-    #             if pathway_method == "ora":
-    #                 collections = ["h"]
-    #                 if "collections" in self.downstream[downstream][pathway_method]:
-    #                     collections = self.downstream[downstream][pathway_method][
-    #                         "collections"
-    #                     ]
-    #                 report_header += f"Over-Representation Analysis (ORA)\n"
-    #                 report_header += f"Collections used: {collections}\n"
-    #             if pathway_method == "gsea":
-    #                 collections = ["h"]
-    #                 if "collections" in self.downstream[downstream][pathway_method]:
-    #                     collections = self.downstream[downstream][pathway_method][
-    #                         "collections"
-    #                     ]
-    #                 parameter = {"permutations": 1000}
-    #                 if "parameter" in self.downstream[downstream][pathway_method]:
-    #                     parameter = self.downstream[downstream][pathway_method][
-    #                         "parameter"
-    #                     ]
-    #                 report_header += "Gene Set Enrichment Analysis (GSEA)\n"
-    #                 report_header += f"Collections: {collections}\n"
-    #                 report_header += f"Parameters: {parameter}\n"
-    # combination_df = self.combination_df()
-    # if combination_df is not None:
-    #     report_header += (
-    #         f"\nSet operations on comparisons\n-----------------------------\n"
-    #     )
-    #     report_header += pp.pformat(combination_df)
-    # return report_header
+    def display_summary(self):
+        """
+        Displays the summyry of analysis on console.
+        """
+        md = self.summary_markdown()
+        console.print(Markdown(md))
 
     def summary_markdown(self) -> str:
         """
@@ -805,7 +743,8 @@ class Analysis:
 
         pp = PrettyPrinter(indent=4)
         report_header = f"## Analysis from toml file '{self.run_toml}'\n"
-        report_header += f"Genome used: {self.genome.name}  \n"
+        genome_name = self.genome.name if hasattr(self, "genome") else "not set!"
+        report_header += f"Genome used: {genome_name}  \n"
         aligner, aligner_params = self.aligner()
         report_header += f"Aligner used: {aligner.name} with parameter {aligner_params}  \n"
         report_header += f"Run-IDs: {pp.pformat(self.run_ids)}  \n"
@@ -820,18 +759,18 @@ class Analysis:
         report_header += "\n\n### Comparisons requested  \n"
         for group_name in self.comparison:
             report_header += f"Comparison group: '{group_name}' \n"
-            for method_name in self.comparison[group_name]:
-                report_header += f"\nMethod: {method_name}"
-                comp_type = self.comparison[group_name][method_name]["type"]
-                if comp_type == "ab":
-                    report_header += "(a vs b) \n\n"
-                elif comp_type == "multi":
-                    report_header += "(multi) \n\n"
-                else:
-                    raise ValueError("Don't know what to do with type {comp_type}.")
-                filepath = self.comparison[group_name][method_name]["path"]  ## ensure field
-                df_in = pd.read_csv(filepath, sep="\t")
-                report_header += df_to_markdown_table(df_in) + "\n"
+            method_name = self.comparison_method_name(self.comparison[group_name])
+            report_header += f"\nMethod: {method_name}"
+            comp_type = self.comparison[group_name]["type"]
+            if comp_type == "ab":
+                report_header += "(a vs b) \n\n"
+            elif comp_type == "multi":
+                report_header += "(multi) \n\n"
+            else:
+                raise ValueError("Don't know what to do with type {comp_type}.")
+            filepath = self.filepath_from_incoming(self.comparison[group_name]["file"])
+            df_in = pd.read_csv(filepath, sep="\t")
+            report_header += df_to_markdown_table(df_in) + "\n"
         report_header += f"\n### Genes  \n"
         genes_used_name = f"Genes_{self.genome.name}"
         if self.has_gene_filter_specified():
@@ -850,7 +789,7 @@ class Analysis:
                 )
                 genes_used_name += f"_{at_least}samples>={threshold}"
         report_header += f"Genes used: {genes_used_name}  \n"
-        report_header += f"\n### Comparisons  \n"
+        report_header += "\n### Comparisons  \n"
         for condition_group in self.comparison:
             report_header += f"From '{condition_group}':  \n"
             for comparison_name in self.comparisons_to_do[condition_group]:
@@ -867,35 +806,54 @@ class Analysis:
                     factors = ",".join([f"{x}({y})" for x, y in params["factor_reference"].items()])
                     desc = f"- compare {comparison_name} with {factors} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
                     report_header += desc
-        report_header += f"\n### Pathway Analysis  \n"
+        report_header += "\n### Pathway Analysis  \n"
         for pathway_method in self.pathway_analysis:
+            parameter = {}
+            if "parameters" in self.pathway_analysis[pathway_method]:
+                parameter = self.pathway_analysis[pathway_method]["parameters"]
+            collections = self.pathway_collections(self.pathway_analysis[pathway_method])
             if pathway_method == "ora":
-                collections = ["h"]
-                if "collections" in self.pathway_analysis[pathway_method]:
-                    collections = self.pathway_analysis[pathway_method]["collections"]
-                report_header += f"\nOver-Representation Analysis (ORA)  \n"
-                report_header += f"Collections used: {collections}  \n"
+                report_header += "\nOver-Representation Analysis (ORA)  \n"
             if pathway_method == "gsea":
-                collections = ["h"]
-                if "collections" in self.pathway_analysis[pathway_method]:
-                    collections = self.pathway_analysis[pathway_method]["collections"]
-                parameter = {"permutations": 1000}
-                if "parameter" in self.pathway_analysis[pathway_method]:
-                    parameter = self.pathway_analysis[pathway_method]["parameter"]
                 report_header += "\nGene Set Enrichment Analysis (GSEA)  \n"
-                report_header += f"Collections: {collections}  \n"
-                report_header += f"Parameters: {parameter}  \n"
+            report_header += f"Collections used: {collections}  \n"
+            report_header += f"Parameters: {parameter}  \n"
         combination_df = self.combination_df()
         if combination_df is not None:
-            report_header += f"\n### Set operations on comparisons  \n"
+            report_header += "\n### Set operations on comparisons  \n"
             report_header += df_to_markdown_table(combination_df)
         return report_header
 
-    def specification(self):
+    def specification(self) -> str:
+        """
+        Returns the specification of the toml file as string.
+
+        Returns
+        -------
+        str
+            Content of the toml file.
+        """
         report_spec = "\n### Specification  \n" + self.pretty()
         return report_spec
 
     def combinations(self) -> Iterator:
+        """
+        Returns an Iterator over all set operations to be performed. This
+        is just read from the combinations file.
+
+        Returns
+        -------
+        Iterable
+            Iterator over all combinations.
+
+        Yields
+        ------
+        Iterator
+            a tuple of comparison name, new name prefix of the combined genes
+            object, a list of comparisons to include, a generator function
+            that performs the set operation on Genes objects and the operation
+            to be performed.
+        """
         df_combinations = self.combination_df()
         if df_combinations is not None:
             for _, row in df_combinations.iterrows():
@@ -930,6 +888,10 @@ class Analysis:
                             new_name, genes_to_combine, sheet_name="Unions"
                         )
 
+                else:
+                    raise NotImplementedError(
+                        f"Unknown set operation specified: {row['operation']}"
+                    )
                 yield condition_group, new_name_prefix, comparisons_to_add, generator, operations
 
     def get_fastqs(self):

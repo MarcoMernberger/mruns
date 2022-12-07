@@ -1,2 +1,4 @@
-a	b	c
-s1	s2	s3
+combined_name	operation	comparison_names	condition_group	comment
+A_vs_eihter_b_and_c	union	A_vs_B,A_vs_C	ABpairs	this is a union
+A_vs_b_and_c	intersection	A_vs_B,A_vs_C	ABpairs	this is an intersection
+A_vs_B_and_not_C	difference	A_vs_B,A_vs_C	ABpairs	this is a difference

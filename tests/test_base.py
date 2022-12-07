@@ -289,13 +289,87 @@ def test_comparison_method(ana):
 
 
 def test_deg_filter_expressions(ana):
-    print(ana.comparison["ABpairs"])
-    exprs = ana.deg_filter_expressions("ABpairs", "DESeq2Unpaired")
-    default = [[["FDR", "<=", 0.05], ["log2FC", "|>", 1]]]
+    exprs = ana.deg_filter_expressions("ABpairs")
+    default = [[["FDR", "<=", "0.05"], ["log2FC", "|>", "1"]]]
     assert exprs == [
-        [["FDR", "<=", 0.05], ["log2FC", "|>", 1]],
-        [["FDR", "<=", 0.05], ["log2FC", ">=", 1]],
-        [["FDR", "<=", 0.05], ["log2FC", "<=", 1]],
+        [["FDR", "<=", "0.05"], ["log2FC", "|>", "1"]],
+        [["FDR", "<=", "0.05"], ["log2FC", ">=", "1"]],
+        [["FDR", "<=", "0.05"], ["log2FC", "<=", "1"]],
     ]
-    del ana.comparison["ABpairs"]["DESeq2Unpaired"]
+    del ana.comparison["ABpairs"]["filter_expressions"]
+    exprs = ana.deg_filter_expressions("ABpairs")
     assert exprs == default
+
+
+def test_deg_filter_expression_as_str(ana):
+    expr = ana.deg_filter_expression_as_str([["FDR", "<=", 0.05], ["log2FC", "|>", 1]])
+    assert expr == "FDR<=0.05_log2FC|>1"
+
+
+def test_pretty(ana):
+    prettystring = ana.pretty()
+    assert isinstance(prettystring, str)
+
+
+@pytest.mark.usefixtures("new_pipegraph_no_qc")
+def test_summary_markdown(ana_pypipe):
+    with mock.patch.object(
+        mbf.externals.ExternalAlgorithm, "get_version_cached", new=lambda *args: "mocked"
+    ):
+        md = ana_pypipe.summary_markdown()
+        assert isinstance(md, str)
+        assert "Set operations on comparisons" in md
+        ana_pypipe.combination_df = lambda: None
+        md = ana_pypipe.summary_markdown()
+        assert isinstance(md, str)
+        assert "Set operations on comparisons" not in md
+
+
+def test_incoming(ana):
+    del ana.project["incoming"]
+    assert ana.incoming == Path("incoming")
+
+
+def test_main_incoming(ana):
+    del ana.project["main_incoming"]
+    assert ana.main_incoming == Path("/rose/ffs/incoming")
+
+
+def test_specification(ana):
+    report_spec = ana.specification()
+    print(report_spec)
+    assert "### Specification" in report_spec
+
+
+def test_combinations(ana):
+    combinations = ana.combinations()
+    assert hasattr(combinations, "__iter__")
+    generators = []
+    for x, y in zip(combinations, ["Union", "Intersection", "Set difference"]):
+        assert x[-1] == y
+        # generator_fnc
+        generators.append(x[3])
+    with mock.patch.object(genomics.genes.genes_from, "FromAny", lambda *_, **__: "FromAny called"):
+        assert generators[0](None, None) == "FromAny called"
+    with mock.patch.object(
+        genomics.genes.genes_from, "FromIntersection", lambda *_, **__: "FromIntersection called"
+    ):
+        assert generators[1](None, None) == "FromIntersection called"
+    with mock.patch.object(
+        genomics.genes.genes_from, "FromDifference", lambda *_, **__: "FromDifference called"
+    ):
+        assert generators[2](None, [1, 2]) == "FromDifference called"
+    with mock.patch.object(ana, "combination_df", lambda: None):
+        ana.df_combinations = None
+        combinations = ana.combinations()
+        assert hasattr(combinations, "__iter__")
+        list = [i for i in combinations]
+        assert len(list) == 0
+
+
+def test_parse_single_comparisons(ana):
+    df = pandas.read_csv("tests/data/group.tsv", sep="\t")
+    df["comparison_name"] = [df["comparison_name"].values[0]] * len(df)
+    with mock.patch.object(pandas, "read_csv", lambda *_, **__: df):
+        with pytest.raises(ValueError):
+            ana.parse_single_comparisons("ABpairs", "DESeq2Unpaired", "ab", "mockpath")
