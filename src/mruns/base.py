@@ -204,6 +204,22 @@ class Analysis:
         """
         return self.incoming / filename
 
+    def get_comparison_group_table(self, comparison_name: str) -> DataFrame:
+        """
+        Returns the DataFrame, in which the comparisons are specified.
+
+        Parameters
+        ----------
+        comparison_name : str
+            Name of the comparison group specified in run.toml.
+
+        Returns
+        -------
+        DataFrame
+            DataFrame, in which the comparisons are specified.
+        """
+        return self.comparisons_to_do[comparison_name]["dataframe"]
+
     def parse_single_comparisons(
         self, comparison_group: str, method_name: str, comparison_type: str, path: str
     ):
@@ -214,7 +230,7 @@ class Analysis:
         for _, row in df_in.iterrows():
             comparison_name = f"{row['comparison_name']}({method_name})"
             if comparison_name in seen:
-                raise ValueError("Duplicate comparison name  {comparison_name} in {path}.")
+                raise ValueError(f"Duplicate comparison name {comparison_name} in {path}.")
             seen.add(comparison_name)
             comparisons_to_do[comparison_name] = {
                 "type": comparison_type,
@@ -222,6 +238,7 @@ class Analysis:
                 "cond2": row["b"],
                 "method": method,
                 "method_name": method_name,
+                "dataframe": df_in,
                 "options": options,
             }
 
@@ -291,6 +308,7 @@ class Analysis:
                     "options": options,
                     "method_name": method_name,
                     "multi_comp_name": multi_comp_name,
+                    "file": path,
                 }
         return multi_comparisons_to_do
 
@@ -459,7 +477,7 @@ class Analysis:
         not_present = set(columns).difference(set(df_samples.columns.values))
         if len(not_present) > 0:
             raise ValueError(
-                f"The samples table {self.path_to_samples_df} does not contain the following required columns {not_present}."
+                f"The samples table {self.path_to_samples_df} does not contain the following required columns {not_present}.\nColumns were: {df_samples.columns.values}."
             )
         group_columns = []
         vids = df_samples["vid"].dropna()
@@ -473,18 +491,19 @@ class Analysis:
             raise ValueError(
                 f"No grouping column found in {self.path_to_samples_df}. This is needed to define groups for comparisons."
             )
-        for col in group_columns:
-            fpath = self.filepath_from_incoming(f"{col}.tsv")
-            if not fpath.exists():
+        for group in self.comparison:
+            group_file = self.comparison[group].get("file", f"{group}.tsv")
+            group_path = self.filepath_from_incoming(group_file)
+            if not group_path.exists():
                 raise FileNotFoundError(
-                    f"Group column {col} specified, but no file {str(fpath)} found."
+                    f"Comparison group {group} specified, but no file {str(group_path)} found."
                 )
-            df_groups = pd.read_csv(fpath, sep="\t")
+            df_groups = pd.read_csv(group_path, sep="\t")
             columns = ["a", "b", "comparison_name", "comment"]
             not_present = set(columns).difference(set(df_groups.columns.values))
             if len(not_present) > 0:
                 raise ValueError(
-                    f"The groups table {str(fpath)} does not contain the following required columns {not_present}."
+                    f"The groups table {str(group_path)} does not contain the following required columns {not_present}."
                 )
 
     def fastq_processor(self) -> Any:
