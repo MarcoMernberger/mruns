@@ -20,7 +20,7 @@ __license__ = "mit"
 def test_analysis_parser(ana):
     assert ana.name == "Test"
     assert ana.analysis_type == "RNAseq"
-    assert ana.main_incoming == Path("tests/data/").resolve()
+    assert ana.main_incoming == Path("tests/data/incoming").resolve()
     assert isinstance(ana.incoming, Path)
     assert str(ana.incoming) == "tests/data"
     assert isinstance(ana.path_to_samples_df, Path)

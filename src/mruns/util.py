@@ -51,7 +51,7 @@ def locate_folder(run_id: str, main_incoming: Path) -> Path:
     run_id : str
         The run id of the run to find.
     main_incoming : Path
-        The main incominb folder on our server.
+        The main incoming folder on our server.
 
     Returns
     -------
@@ -61,9 +61,9 @@ def locate_folder(run_id: str, main_incoming: Path) -> Path:
     Raises
     ------
     ValueError
-        _description_
+        If main incoming path with sequencer projects does not exist.
     ValueError
-        _description_
+        If no path could be found.
     """
     if not main_incoming.exists():
         raise ValueError(
@@ -72,8 +72,10 @@ def locate_folder(run_id: str, main_incoming: Path) -> Path:
     folders_to_check = [main_incoming]
     while len(folders_to_check) > 0:
         folder = folders_to_check.pop(0)
-        logging.info("checking {folder} ...")
+        print(f"checking {folder} ...")
+        logging.info(f"checking {folder} ...")
         f = folder / run_id
+        print(f, f.exists())
         if f.exists():
             return f
         else:

@@ -17,7 +17,7 @@ def test_locate_folder():
     run3 = "221201_NB552003_testrun3"
     runfail = "not_there"
     print(runs_incoming)
-    for x in runs_incoming:
+    for x in runs_incoming.iterdir():
         print(x)
     path = util.locate_folder(run1, runs_incoming)
     assert isinstance(path, Path)

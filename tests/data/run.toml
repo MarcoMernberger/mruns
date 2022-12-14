@@ -1,9 +1,9 @@
 [project]
 name = "Test"
 analysis_type = "RNAseq"
-run_ids = ["testrun"]
+run_ids = ["221130_NB552003_testrun1"]
 incoming = "tests/data"
-main_incoming = "tests/data/"
+main_incoming = "tests/data/incoming"
 
 [samples]
 df_samples = "samples.tsv"

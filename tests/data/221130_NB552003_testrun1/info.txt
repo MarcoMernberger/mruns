@@ -1,0 +1,3 @@
+copied:
+_r1_.fastq
+_r2_.fastq
