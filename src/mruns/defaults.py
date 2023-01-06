@@ -13,7 +13,7 @@ from mbf.genomics.annotator import Annotator
 from pypipegraph import Job
 from mreports import MarkdownItem, PlotItem, HTMLItem, Item
 from mpathways import GSEA, GMTCollection, MSigChipEnsembl, MSigDBCollection, ORAHyper
-from mplots import volcanoplot
+from mplots import volcano
 from .base import Analysis
 from .util import assert_uniqueness
 
@@ -142,11 +142,13 @@ class Defaults:
                 meta_rows=False,
                 meta_columns=True,
             )
+            plotjobs = ml_plot.plot_simple(
+                outfile=Path(genes.result_dir) / f"{genes.name}_hm.png",
+            ).plot
+            print(plotjobs)
             pl = PlotItem(
                 self.genes_parameters[genes.name]["section"],
-                ml_plot.plot_simple(
-                    outfile=Path(genes.result_dir) / f"{genes.name}_hm.png",
-                ),
+                plotjobs,
                 f"#### Heatmap for {genes.name}",
             )
             items.append(pl)
@@ -183,15 +185,16 @@ class Defaults:
                     meta_rows=False,
                     meta_columns=True,
                 )
+                plotjobs = p.plot_2d(
+                    outfile=Path(genes.result_dir) / filename,
+                    title=f"PCA {genes.name}",
+                    class_label_column=self.genes_parameters[genes.name]["group"],
+                    show_names=False,
+                    model_name="PCA",
+                )[0].plot
                 pl = PlotItem(
                     self.genes_parameters[genes.name]["section"],
-                    p.plot_2d(
-                        outfile=Path(genes.result_dir) / filename,
-                        title=f"PCA {genes.name}",
-                        class_label_column=self.genes_parameters[genes.name]["group"],
-                        show_names=False,
-                        model_name="PCA",
-                    ),
+                    plotjobs,
                     f"#### Principle component analysis (PCA) on DE genes in {genes.name}"
                     + nbsuffix,
                 )
@@ -210,28 +213,23 @@ class Defaults:
                         comparison_ab.column_lookup["FDR"],
                         comparison_ab.column_lookup["log2FC"],
                     ]
-                if (
-                    genes.name
-                    == "12h(DESeq2MultiFactor)_12h:untr(treatment) effect difference for RR:WT(genotype) FDR<=0.05_12h:untr(treatment) effect difference for RR:WT(genotype) log2FC|>1"
-                ):
-                    print(genes.result_dir / f"{genes.name}_volcano.png")
-                    print(comp_name)
                 if volcano_plot_columns is not None:
+                    volcanos = volcano(
+                        self.genes_used,
+                        volcano_plot_columns[0],
+                        volcano_plot_columns[1],
+                        significance_threshold=0.05,
+                        fc_threhold=1,
+                        outfile=genes.result_dir / f"{genes.name}_volcano.png",
+                        dependencies=[
+                            self.genes_used.load(),
+                            genes.add_annotator(comparison_ab),
+                        ],
+                        title=genes.name,
+                    ).plot
                     pl = PlotItem(
                         self.genes_parameters[genes.name]["section"],
-                        volcanoplot(
-                            self.genes_used,
-                            volcano_plot_columns[0],
-                            volcano_plot_columns[1],
-                            significance_threshold=0.05,
-                            fc_threhold=1,
-                            outfile=genes.result_dir / f"{genes.name}_volcano.png",
-                            dependencies=[
-                                self.genes_used.load(),
-                                genes.add_annotator(comparison_ab),
-                            ],
-                            title=genes.name,
-                        ),
+                        volcanos,
                         f"#### Volcano plot for DE genes in {genes.name} using {comp_name}",
                     )
                     items.append(pl)
@@ -274,9 +272,10 @@ class Defaults:
             genes = self.genes_to_analyze[genes_name]
             for he in self.get_oras():
                 job = he.run(genes)
+                plotjobs = he.plot_bars(job).plot
                 pl = PlotItem(
                     self.genes_parameters[genes.name]["section"],
-                    he.plot_bars(job),
+                    plotjobs,
                     f"#### Over-Representation Analysis using hypergeometric test on DE genes from {genes.name} with collection {he.collection.name}",
                 )
                 items.append(pl)

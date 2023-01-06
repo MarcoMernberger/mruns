@@ -171,11 +171,21 @@ class Analysis:
         self.get_fastqs()
         self._verify()
         if ppg.inside_ppg():
-            self.set_genome()
+            print("inside ppg")
+        else:
+            print("outside ppg")
+        self.set_genome()
+
+        self.comparison_incoming = self.read_comparison_tables()
         self.verify_samples()
         self.comparisons_to_do = self.parse_comparisons()
 
     def set_genome(self):
+        print("setting genome")
+        import pypipegraph2 as ppg
+        import mbf
+
+        pypegraph = ppg.new()
         if self.alignment["species"] == "Mus_musculus":
             self._genome = genomes.Mus_musculus(self.alignment["revision"])
         elif self.alignment["species"] == "Homo_sapiens":
@@ -187,6 +197,8 @@ class Analysis:
                 )
             except:
                 raise
+        ppg.run()
+        self.jobs = pypegraph.jobs
 
     def filepath_from_incoming(self, filename: str) -> Path:
         """
@@ -218,14 +230,40 @@ class Analysis:
         DataFrame
             DataFrame, in which the comparisons are specified.
         """
-        return self.comparisons_to_do[comparison_name]["dataframe"]
+        return self.comparison_incoming[comparison_name]
+
+    def read_comparison_tables(self) -> Dict[str, DataFrame]:
+        """
+        Reads all comparison tables from incoming and returns a dictionary of them.
+
+        Returns
+        -------
+        Dict[str, DataFrame]
+            Dictionary with comparison tables.
+
+        Raises
+        ------
+        FileNotFoundError
+            If required fields in the toml file sections are missing.
+        """
+        comparison_tables = {}
+        for group in self.comparison:
+            group_file = self.comparison[group].get("file", f"{group}.tsv")
+            group_path = self.filepath_from_incoming(group_file)
+            if not group_path.exists():
+                raise FileNotFoundError(
+                    f"Comparison group {group} specified, but no file {str(group_path)} found."
+                )
+            df_in = pd.read_csv(group_path, sep="\t")
+            comparison_tables[group] = df_in
+        return comparison_tables
 
     def parse_single_comparisons(
         self, comparison_group: str, method_name: str, comparison_type: str, path: str
     ):
         comparisons_to_do = {}
         seen = set()
-        df_in = pd.read_csv(path, sep="\t")
+        df_in = self.get_comparison_group_table(comparison_group)
         method, options = self.comparison_method(comparison_group, method_name)
         for _, row in df_in.iterrows():
             comparison_name = f"{row['comparison_name']}({method_name})"
@@ -238,7 +276,6 @@ class Analysis:
                 "cond2": row["b"],
                 "method": method,
                 "method_name": method_name,
-                "dataframe": df_in,
                 "options": options,
             }
 
@@ -249,7 +286,7 @@ class Analysis:
     ):
         df_factor_path = self.filepath_from_incoming(self.comparison[comparison_group]["file"])
         multi_comparisons_to_do = {}
-        df_factor = pd.read_csv(df_factor_path, sep="\t")
+        df_factor = self.get_comparison_group_table(comparison_group)
         method_name = self.comparison_method_name(self.comparison[comparison_group])
         method, options = self.comparison_method(comparison_group, method_name)
 
@@ -492,13 +529,7 @@ class Analysis:
                 f"No grouping column found in {self.path_to_samples_df}. This is needed to define groups for comparisons."
             )
         for group in self.comparison:
-            group_file = self.comparison[group].get("file", f"{group}.tsv")
-            group_path = self.filepath_from_incoming(group_file)
-            if not group_path.exists():
-                raise FileNotFoundError(
-                    f"Comparison group {group} specified, but no file {str(group_path)} found."
-                )
-            df_groups = pd.read_csv(group_path, sep="\t")
+            df_groups = self.get_comparison_group_table(group)
             columns = ["a", "b", "comparison_name", "comment"]
             not_present = set(columns).difference(set(df_groups.columns.values))
             if len(not_present) > 0:
@@ -703,7 +734,7 @@ class Analysis:
         List[Any]
             List of filter expressions.
         """
-        default = [[["FDR", "<=", "0.05"], ["log2FC", "|>", "1"]]]
+        default = [[["FDR", "<=", 0.05], ["log2FC", "|>", 1]]]
         if "filter_expressions" in self.comparison[comparison_group]:
             expr = self.comparison[comparison_group]["filter_expressions"]
             return expr
@@ -740,6 +771,7 @@ class Analysis:
         """
         pp = PrettyPrinter(indent=4)
         d = vars(self).copy()
+        del d["jobs"]
         return "Analysis(\n" + pp.pformat(d) + "\n)"
 
     def display_summary(self):
@@ -769,6 +801,10 @@ class Analysis:
         report_header += f"Aligner used: {aligner.name} with parameter {aligner_params}  \n"
         report_header += f"Run-IDs: {pp.pformat(self.run_ids)}  \n"
         report_header += f"Fastq-Processor: {self.fastq_processor().__class__.__name__}  \n"
+        postprocessor_name = "None"
+        if self.post_processor is not None:
+            postprocessor_name = self.post_processor().__class__.__name__
+        report_header += f"Alignment Postprocessor: {postprocessor_name} \n"
         raw_counter = self.raw_counter()
         norm_counter = self.norm_counter()
         report_header += f"Raw counter: {raw_counter.__name__}  \n"
@@ -788,8 +824,8 @@ class Analysis:
                 report_header += "(multi) \n\n"
             else:
                 raise ValueError("Don't know what to do with type {comp_type}.")
-            filepath = self.filepath_from_incoming(self.comparison[group_name]["file"])
-            df_in = pd.read_csv(filepath, sep="\t")
+            # filepath = self.filepath_from_incoming(self.comparison[group_name]["file"])
+            df_in = self.get_comparison_group_table(group_name)  # pd.read_csv(filepath, sep="\t")
             report_header += df_to_markdown_table(df_in) + "\n"
         report_header += f"\n### Genes  \n"
         genes_used_name = f"Genes_{self.genome.name}"
