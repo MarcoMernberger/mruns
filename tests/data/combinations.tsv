@@ -1,4 +1,4 @@
-combined_name	operation	comparison_names	condition_group	comment
-A_vs_eihter_b_and_c	union	A_vs_B,A_vs_C	ABpairs	this is a union
-A_vs_b_and_c	intersection	A_vs_B,A_vs_C	ABpairs	this is an intersection
-A_vs_B_and_not_C	difference	A_vs_B,A_vs_C	ABpairs	this is a difference
+combined_name	operation	gene_names	condition_group	comment
+C_vs_D_A_or_B	union	C_vs_D(A)_FDR<=0.05_logFC|>1,C_vs_D(B)_FDR<=0.05_logFC|>1	ABpairs	this is a union
+C_vs_D_A_and_B	intersection	C_vs_D(A)_FDR<=0.05_logFC|>1,C_vs_D(B)_FDR<=0.05_logFC|>1	ABpairs	this is an intersection
+C_vs_D_A_only	difference	C_vs_D(A)_FDR<=0.05_logFC|>1,C_vs_D(B)_FDR<=0.05_logFC|>1	ABpairs	this is a difference

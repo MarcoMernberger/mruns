@@ -1,0 +1,1 @@
+gene_stable_id	name	chr	start	stop	strand	tss	tes	biotype	FDR DESeqMock	S1 CPM	S1 raw	S2 CPM	S2 raw	S3 CPM	S3 raw	S4 CPM	S4 raw	S5 CPM	S5 raw	S6 CPM	S6 raw	S7 CPM	S7 raw	S8 CPM	S8 raw	baseMean DESeqMock	lfcSE DESeqMock	log2FC DESeqMock	p DESeqMock	stat DESeqMock	parent_row

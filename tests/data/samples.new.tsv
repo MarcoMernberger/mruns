@@ -1,0 +1,9 @@
+number	sample	prefix	factor1	factor2	ts	comment	vid
+1	S1	S1_	condA	condC	1	some comment on what happened to these samples	TT001
+2	S2	S2_	condA	condC	1	some comment on what happened to these samples	TT002
+3	S3	S3_	condA	condD	1	some comment on what happened to these samples	TT003
+4	S4	S4_	condA	condD	1	some comment on what happened to these samples	TT004
+5	S5	S5_	condB	condC	1	some comment on what happened to these samples	TT005
+6	S6	S6_	condB	condC	1	some comment on what happened to these samples	TT006
+7	S7	S7_	condB	condD	1	some comment on what happened to these samples	TT007
+8	S8	S8_	condB	condD	1	some comment on what happened to these samples	TT008

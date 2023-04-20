@@ -1,0 +1,10 @@
+um_scaf_contig_1.271	ena	gene	265	749	.	+	.	gene_id "UMAG_06513"; gene_source "ena"; gene_biotype "protein_coding";
+um_scaf_contig_1.271	ensembl	transcript	265	749	.	+	.	gene_id "UMAG_06513"; transcript_id "KIS65645"; gene_source "ena"; gene_biotype "protein_coding"; transcript_source "ensembl"; transcript_biotype "protein_coding";
+um_scaf_contig_1.271	ensembl	exon	265	375	.	+	.	gene_id "UMAG_06513"; transcript_id "KIS65645"; exon_number "1"; gene_source "ena"; gene_biotype "protein_coding"; transcript_source "ensembl"; transcript_biotype "protein_coding"; exon_id "KIS65645-1";
+um_scaf_contig_1.271	ensembl	CDS	265	375	.	+	0	gene_id "UMAG_06513"; transcript_id "KIS65645"; exon_number "1"; gene_source "ena"; gene_biotype "protein_coding"; transcript_source "ensembl"; transcript_biotype "protein_coding"; protein_id "KIS65645";
+um_scaf_contig_1.271	ensembl	start_codon	265	267	.	+	0	gene_id "UMAG_06513"; transcript_id "KIS65645"; exon_number "1"; gene_source "ena"; gene_biotype "protein_coding"; transcript_source "ensembl"; transcript_biotype "protein_coding";
+um_scaf_contig_1.271	ensembl	exon	426	749	.	+	.	gene_id "UMAG_06513"; transcript_id "KIS65645"; exon_number "2"; gene_source "ena"; gene_biotype "protein_coding"; transcript_source "ensembl"; transcript_biotype "protein_coding"; exon_id "KIS65645-2";
+um_scaf_contig_1.271	ensembl	CDS	426	746	.	+	0	gene_id "UMAG_06513"; transcript_id "KIS65645"; exon_number "2"; gene_source "ena"; gene_biotype "protein_coding"; transcript_source "ensembl"; transcript_biotype "protein_coding"; protein_id "KIS65645";
+um_scaf_contig_1.271	ensembl	stop_codon	747	749	.	+	0	gene_id "UMAG_06513"; transcript_id "KIS65645"; exon_number "2"; gene_source "ena"; gene_biotype "protein_coding"; transcript_source "ensembl"; transcript_biotype "protein_coding";
+
+

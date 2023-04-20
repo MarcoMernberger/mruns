@@ -1,0 +1,121 @@
+@startuml
+!theme crt-green
+!define COMMENT(x) <color:grey>x</color>
+GenesPCAFactory <|-- ModuleFactory
+PCA <|-- Module
+
+
+class Runner{
+    + String name
+    + Analysis analysis
+    + EnsemblGenome Genome
+    + Aligner aligner
+    + Dict[str, Counter] raw_counters
+    + Dict[str, Dict[str, NormCounters]] = norm_counters
+    + GenesRegistry all_genes
+    +init_tools()
+    +create_lanes()
+    +align()
+    +count()
+    +normalize()
+    +prefilter()
+    +differential()
+    +filter()
+    +combine()
+    +pathways()
+}
+
+class GenesWrapper{
+    + str name
+    + Genes genes
+    + str tag
+    + Dict[str, Module] modules
+    + Dict[str, List[Job]] dependencies
+    + Dict[str, genes] ancestors
+    + Dict[str, List[str]] relevant_columns
+    - register_module(module, dependencies) COMMENT(register a single module to be executed)
+    - jobify_modules() -> List[Job] COMMENT(returns a list of all jobs that creates outputs)
+    - jobify(module) -> Job  COMMENT(Turns a single registered module into a job)
+    - jobs()  COMMENT(All jobs for this object)
+}
+
+class GenesCollection(UserDict){
+    + genes_by_tag() -> Dict[GenesWrapper]
+    + register_module(module: Module, gene_name: str)  
+    + register_module_for_tag(module: Module, tag: str)  COMMENT(register a module for all genes with this tag)
+    + register_default_for_tag(tag: str, default_module_name: str)  COMMENT(registers default module for all GenesWrapper with tag)
+    + register_default(default_module_name: str, gene_name: str)
+    - data Dict[str, GenesWrapper]
+}
+
+class Module{
+    + str name
+    + List[str] _inputs
+    + List[str] _outputs
+    + Dict[str, Any] arguments
+    + pipe(module) COMMENT(use the output of this module as input for the next)
+    + run() COMMENT(loads the input and creates the output)
+    - load_inputs() COMMENT(ensure all inputs are attributes)
+    - __load_input(name: str) COMMENT(loads a single input as attribute)
+    - get_input(name: str) -> Any COMMENT(returns the input)
+    - verify_input()
+    - verify_parameters()
+}
+
+class PCA(Module){
+}
+
+class Volcano(Module){
+}
+
+ModuleFactory{
+    + runner
+    + str name
+    + Dict[str, ModuleFactory] known_defaults
+    + module(columns: List[str], parameters: Dict) COMMENT(instantiate default module for a GenesWrapper)
+}
+
+
+
+
+
+class ModuleFactory{
+    + str name
+    + module(ga: GenesWrapper, kwargs)
+}
+
+class GenesPCAFactory(ModuleFactory){
+    + str name
+    + module(ga: GenesWrapper, kwargs)
+    
+}
+    
+class DefaultModuleRegistrator{
+    + module(default_module_name: str, ga: GenesWrapper) -> mod: Module  
+}
+
+' class Input{
+'     can be a file, a function or a job
+' }
+
+' class Output{
+'     can be a file, a function or a job
+' }
+
+
+' ## hot to register the modules ...
+' 
+' all analysis based on the gene object
+' we need to know:
+    ' - the module class
+    ' - the columns to filter (as the dataframe should only contain the neccessary columns)
+    ' - parameter for the module
+' 
+' 
+' filtered genes:
+    ' - runner knows the Transformers used in the comparison
+    ' - transformers know the columns they produce
+    ' - runner knows the transformers used by comparison
+' combined genes:
+    ' - 
+' 

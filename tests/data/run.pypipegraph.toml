@@ -6,9 +6,9 @@ incoming = "../../data"
 main_incoming = "../../data/incoming"
 
 [samples]
-df_samples = "samples.tsv"
+file = "samples_ppg.tsv"
 reverse_reads = false
-kit = "NextSeq"            #fastq_processor="UMIExtractAndTrim"
+kit = "NextSeq"          #fastq_processor="UMIExtractAndTrim"
 stranded = true
 
 [alignment]
@@ -16,28 +16,15 @@ species = "Homo_sapiens"
 revision = 98
 aligner = "STAR"
 
+
+[normalization]
+CPM = "NormalizationCPM"
+
 [genes.filter]
-canonical = true
-biotypes = [
-    "protein_coding",
-    "snRNA",
-    "snoRNA",
-    "miRNA",
-    "3prime_overlapping_ncRNA",
-    "processed_transcript",
-    "non_coding",
-    "scRNA",
-    "vaultRNA",
-    "scaRNA",
-    "sRNA",
-    "Mt_tRNA",
-    "misc_RNA",
-    "Mt_rRNA",
-    "macro_lncRNA",
-    "bidirectional_promoter_lncRNA",
-    "lincRNA",
-]
-cpm_threshold = 1
+chr = "canonical"
+biotypes = ["protein_coding", "lincRNA"]
+thresholds = [["CPM", "1>", 1]]
+drop_empty_names = true
 
 [comparison]
 
@@ -99,16 +86,33 @@ filter_expressions = [
 # include_other_samples_for_variance = true # default
 
 
+#____________ [comparison.pairwise]
+#____________ method = "DESeq2Unpaired"
+#____________ type = "ab"
+#____________ file = "comparisons.pairwise.tsv"
+#____________ factors = ["cell line", "p53"]
+#____________ filter_expression = [["FDR", "<=", 0.05], ["log2FC", "|>", 1]]
+#____________ include_other_samples_for_variance = false
+
+# [comparison.time_series]
+# method = "DESeq2_Timeseries"
+# type = "multi"
+# factors = ["p53","time"]
+# formula = "~ p53 time p53:time"
+# reduced = "~ p53"
+# file = "comparisons.time_series.tsv"
+
+
 [combination]
 # put combinations of gene lists/comparisons here
 file = "combinations.tsv"
 
-[pathway_analysis]
+[pathways]
 
-[pathway_analysis.ora]
+[pathways.ora]
 collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
 
-[pathway_analysis.gsea]
+[pathways.gsea]
 parameters = [["permutation", 1000]]
 
 collections = ["c6", "c7", "c2", "c5", "h", "ipa"]

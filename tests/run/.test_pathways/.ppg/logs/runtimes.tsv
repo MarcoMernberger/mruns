@@ -1,0 +1,12 @@
+jobid	run_start_time	runtime_s
+cache/gmt/c2.all.v7.1/Homo_sapiens/input.gmt	1679409005	2.28
+cache/gmt/c2.all.v7.1/Homo_sapiens/ensembl.gmt	1679409005	1.29
+cache/gmt/h.all.v7.1_c2.all.v7.1/Homo_sapiens/ensembl.gmt	1679409005	1.29
+results/Genes/C_vs_D(A)_FDR<=0.05_logFC|>1/ORA/C_vs_D(A)_FDR<=0.05_logFC|>1_ORA(c2).tsv	1679409005	6.29
+results/Genes/C_vs_D(A)_FDR<=0.05_logFC|>1/ORA/C_vs_D(A)_FDR<=0.05_logFC|>1_ORA(all).tsv	1679409005	6.29
+results/Genes/C_vs_D(A)_FDR<=0.05_logFC>=1/ORA/C_vs_D(A)_FDR<=0.05_logFC>=1_ORA(c2).tsv	1679409005	6.29
+results/Genes/C_vs_D(A)_FDR<=0.05_logFC>=1/ORA/C_vs_D(A)_FDR<=0.05_logFC>=1_ORA(all).tsv	1679409005	6.30
+results/Genes/C_vs_D(B)_FDR<=0.05_logFC|>1/ORA/C_vs_D(B)_FDR<=0.05_logFC|>1_ORA(c2).tsv	1679409005	6.29
+results/Genes/C_vs_D(B)_FDR<=0.05_logFC|>1/ORA/C_vs_D(B)_FDR<=0.05_logFC|>1_ORA(all).tsv	1679409005	6.29
+results/Genes/C_vs_D(B)_FDR<=0.05_logFC>=1/ORA/C_vs_D(B)_FDR<=0.05_logFC>=1_ORA(c2).tsv	1679409005	6.29
+results/Genes/C_vs_D(B)_FDR<=0.05_logFC>=1/ORA/C_vs_D(B)_FDR<=0.05_logFC>=1_ORA(all).tsv	1679409005	6.29

@@ -45,77 +45,23 @@ def test_analysis_parser(ana):
     assert ana.comparison["ABpairs"]["file"] == "group.tsv"
     assert ana.comparison["ABpairs"]["method"] == "DESeq2Unpaired"
     assert isinstance(ana.comparison["ABpairs"]["filter_expressions"], list)
-    assert [["FDR", "<=", "0.05"], ["log2FC", "|>", "1"]] in ana.comparison["ABpairs"][
+    assert [["FDR", "<=", 0.05], ["log2FC", "|>", 1]] in ana.comparison["ABpairs"][
         "filter_expressions"
     ]
     assert str(ana.path_to_combination_df) == "tests/data/combinations.tsv"
     assert isinstance(ana.comparison["ABpairs"]["parameters"], dict)
-    assert hasattr(ana, "pathway_analysis")
-    assert "ora" in ana.pathway_analysis
-    assert "gsea" in ana.pathway_analysis
+    assert hasattr(ana, "pathways")
+    assert "ora" in ana.pathways
+    assert "gsea" in ana.pathways
     collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
-    assert hasattr(ana.pathway_analysis["ora"]["collections"], "__iter__")
-    unittest.TestCase().assertListEqual(
-        list(ana.pathway_analysis["ora"]["collections"]), collections
-    )
-    unittest.TestCase().assertListEqual(
-        list(ana.pathway_analysis["gsea"]["collections"]), collections[:-1]
-    )
+    assert hasattr(ana.pathways["ora"]["collections"], "__iter__")
+    unittest.TestCase().assertListEqual(list(ana.pathways["ora"]["collections"]), collections)
+    unittest.TestCase().assertListEqual(list(ana.pathways["gsea"]["collections"]), collections[:-1])
     assert ana.reports["name"] == "run_report"
 
 
 def test_analysis_incoming(ana):
     assert isinstance(ana.incoming, Path)
-
-
-@pytest.mark.usefixtures("new_pipegraph_no_qc")
-def test_set_genome(ana_pypipe):
-    ana = ana_pypipe
-    assert hasattr(ana_pypipe, "genome")
-    assert ana.genome.species == "Homo_sapiens"
-    assert ana.genome.revision == "98"
-    mouse = {"species": "Mus_musculus", "revision": 98, "aligner": "STAR"}
-    ana2 = Analysis(
-        "",
-        ana.project,
-        ana.samples,
-        mouse,
-        ana.genes,
-        ana.comparison,
-        ana.pathway_analysis,
-        ana.reports,
-        None,
-    )
-    assert ana2.genome.species == "Mus_musculus"
-    assert ana2.genome.revision == "98"
-    rat = {"species": "Rattus_norvegicus", "revision": 98, "aligner": "STAR"}
-    ana2 = Analysis(
-        "",
-        ana.project,
-        ana.samples,
-        rat,
-        ana.genes,
-        ana.comparison,
-        ana.pathway_analysis,
-        ana.reports,
-        None,
-    )
-    assert ana2.genome.species == "Rattus_norvegicus"
-    with pytest.raises(ValueError):
-        fail = {"species": "Biggusdickus", "revision": 98, "aligner": "STAR"}
-        ana3 = Analysis(
-            "",
-            ana.project,
-            ana.samples,
-            fail,
-            ana.genes,
-            ana.comparison,
-            ana.pathway_analysis,
-            ana.reports,
-            None,
-        )
-        ana3.set_genome()
-        assert ana3.genome.species == "Biggusdickus"
 
 
 def test_verfiy(ana):
@@ -171,23 +117,20 @@ def test_verify_samples(ana):
             "vid": ["MM01", "MM02"],
         }
     )
-
-    with mock.patch.object(pandas, "read_csv", new=lambda *__, **_: df):
+    with mock.patch.object(ana, "sample_df", new=lambda *__, **_: df):
+        ana.verify_samples()
+    with mock.patch.object(ana, "sample_df", new=lambda *args: df):
+        ana.comparison["nonexistent"] = {"file": "group_nonexistent.tsv"}
         with pytest.raises(ValueError) as info:
             ana.verify_samples()
-            assert "does not contain the following required columns" in str(info)
-    df["nonexistent"] = df["ABpairs"].values
-    ana.comparison["nonexistent"] = {"file": "group_nonexistent.tsv"}
-    with mock.patch.object(ana, "sample_df", new=lambda *args: df):
-        with pytest.raises(FileNotFoundError) as info:
+            print(str(info))
+            assert "No factors and no grouping column" in str(info)
+        ana.comparison["nonexistent"]["factors"] = ["condition"]
+        with pytest.raises(ValueError) as info:
             ana.verify_samples()
-        assert "specified, but no file" in str(info)
-    del df["nonexistent"]
-    del df["ABpairs"]
-    with pytest.raises(ValueError) as info:
-        with mock.patch.object(ana, "sample_df", new=lambda *args: df):
-            ana.verify_samples()
-            assert "No grouping column found in" in str(info)
+            print(str(info))
+            assert "is missing the following factors: ['condition']" in str(info)
+        del ana.comparison["nonexistent"]
     df["vid"] = ["MM01", "MM01"]
     with mock.patch.object(ana, "sample_df", new=lambda *args: df):
         with pytest.raises(ValueError) as info:
@@ -196,7 +139,7 @@ def test_verify_samples(ana):
     with mock.patch.object(ana, "sample_df", new=lambda *args: DataFrame({"a": [123]})):
         with pytest.raises(ValueError) as info:
             ana.verify_samples()
-            assert "oes not contain the following required columns" in str(info)
+            assert "does not contain the following required columns" in str(info)
 
 
 def fastq_processor(ana):
@@ -290,11 +233,11 @@ def test_comparison_method(ana):
 
 def test_deg_filter_expressions(ana):
     exprs = ana.deg_filter_expressions("ABpairs")
-    default = [[["FDR", "<=", "0.05"], ["log2FC", "|>", "1"]]]
+    default = [[["FDR", "<=", 0.05], ["log2FC", "|>", 1]]]
     assert exprs == [
-        [["FDR", "<=", "0.05"], ["log2FC", "|>", "1"]],
-        [["FDR", "<=", "0.05"], ["log2FC", ">=", "1"]],
-        [["FDR", "<=", "0.05"], ["log2FC", "<=", "1"]],
+        [["FDR", "<=", 0.05], ["log2FC", "|>", 1]],
+        [["FDR", "<=", 0.05], ["log2FC", ">=", 1]],
+        [["FDR", "<=", 0.05], ["log2FC", "<=", 1]],
     ]
     del ana.comparison["ABpairs"]["filter_expressions"]
     exprs = ana.deg_filter_expressions("ABpairs")
@@ -377,7 +320,7 @@ def test_combinations(ana):
 def test_parse_single_comparisons(ana):
     df = pandas.read_csv("tests/data/group.tsv", sep="\t")
     df["comparison_name"] = [df["comparison_name"].values[0]] * len(df)
-    with mock.patch.object(pandas, "read_csv", lambda *_, **__: df):
+    with mock.patch.object(ana, "get_comparison_group_table", lambda *_, **__: df):
         with pytest.raises(ValueError):
             ana.parse_single_comparisons("ABpairs", "DESeq2Unpaired", "ab", "mockpath")
 
@@ -387,7 +330,6 @@ def test_parse_comparisons(ana):
     ana.comparison["ABpairs"]["type"] = comp_type
     with pytest.raises(ValueError) as info:
         ana.parse_comparisons()
-        print(str(info))
         assert f"Don't know what to do with type {comp_type}." in str(info)
     ana.comparison["ABpairs"]["type"] = "multi"
     with mock.patch.object(

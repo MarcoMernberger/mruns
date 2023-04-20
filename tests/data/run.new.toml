@@ -1,0 +1,174 @@
+[project]
+name = "Test"
+analysis_type = "RNAseq"
+run_ids = ["221130_NB552003_testrun1"]
+incoming = "../../data"
+main_incoming = "../../data/incoming"
+
+[samples]
+file = "samples.new.tsv"
+reverse_reads = false
+kit = "QuantSeq"         #fastq_processor="UMIExtractAndTrim"
+stranded = true
+
+[alignment]
+species = "Homo_sapiens"
+revision = 98
+aligner = "STAR"
+parameters = [["some", "parameter"]]
+
+[normalization]
+TPM = "NormalizationTPM"
+CPM = "NormalizationCPM"
+
+[genes.filter]
+chr = "canonical"
+biotypes = ["protein_coding", "lincRNA"]
+thresholds = [["CPM", "1>", 1]]
+drop_empty_names = true
+
+
+[comparison]
+
+[comparison.ABpairs] # groupname, e.g. ABpairs
+method = "DESeq2Unpaired"
+type = "ab"
+file = "group.new.tsv"
+factors = ["factor1", "factor2"]
+filter_expressions = [
+    [
+        [
+            "FDR", # attribute_name!
+            "<=",  # operator
+            0.05,  # threshold
+        ],
+        ["logFC", "|>", 1],
+    ],
+    [["FDR", "<=", 0.05], ["logFC", ">=", 1]],
+    [["FDR", "<=", 0.05], ["logFC", "<=", 1]],
+]
+
+# put parameters for the method instantiation here
+parameters = {}
+
+# laplace_offset = 0 # default
+# include_other_samples_for_variance = true # default
+
+[comparison.timeseries]
+method = "DESeq2Timeseries"
+type = "timeseries"
+factors = ["factor1", "factor2"]
+formula = "~ factor1 factor2 factor1:factor2"
+reduced = "~ factor1"
+file = "comparison.timeseries.tsv"
+# put parameters for the method instantiation here
+parameters = {}
+
+
+#########this is multi
+# [comparison.Multi]
+# type = "multi"
+
+# method = "DESeq2MultiFactor"
+
+# file = "multi.tsv"
+
+# filter_expressions = 
+# 12h = [
+#     [
+#         [
+#             "12h:untr(treatment) effect for WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "12h:untr(treatment) effect for WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+#     [
+#         [
+#             "12h:untr(treatment) effect for RR:WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "12h:untr(treatment) effect for RR:WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+#     [
+#         [
+#             "12h:untr(treatment) effect difference for RR:WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "12h:untr(treatment) effect difference for RR:WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+# ]
+# 24h = [
+#     [
+#         [
+#             "24h:untr(treatment) effect for WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "24h:untr(treatment) effect for WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+#     [
+#         [
+#             "24h:untr(treatment) effect for RR:WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "24h:untr(treatment) effect for RR:WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+#     [
+#         [
+#             "24h:untr(treatment) effect difference for RR:WT(genotype) FDR",
+#             "<=",
+#             0.05,
+#         ],
+#         [
+#             "24h:untr(treatment) effect difference for RR:WT(genotype) log2FC",
+#             "|>",
+#             1,
+#         ],
+#     ],
+# ]
+#########this is multi
+
+
+[combination]
+# put combinations of gene lists/comparisons here
+file = "combinations.tsv"
+
+[pathways.gsea]
+collections = ["h", "c2"]
+file = "group.new.tsv"
+counter = "CPM"
+
+[pathways.gsea.parameter]
+median = true
+permutations = 1000
+
+[pathways.ora]
+collections = ["h", "c2"]
+
+
+[reports]
+name = "run_report"

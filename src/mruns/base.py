@@ -26,6 +26,7 @@ from .util import (
     assert_uniqueness,
 )
 from pprint import PrettyPrinter
+import mdataframe
 import dataclasses
 import pandas as pd
 import pypipegraph as ppg
@@ -46,7 +47,7 @@ console = Console()
 
 _required_fields = {
     "project": ["name", "analysis_type", "run_ids"],
-    "samples": ["df_samples", "reverse_reads", "kit", "stranded"],
+    "samples": ["file", "reverse_reads", "kit", "stranded"],
     "alignment": ["species", "revision", "aligner"],
     "genes": [],
     "comparison": [],
@@ -62,9 +63,10 @@ class Analysis:
     alignment: Dict[str, Any]
     genes: Dict[str, Any]
     comparison: Dict[str, Any]
-    pathway_analysis: Dict[str, Any]
+    pathways: Dict[str, Any]
     reports: Dict[str, Any]
     combination: Dict[str, Any]
+    normalization: Dict[str, Any]
     __allowed_types: ClassVar[List[str]] = ["RNAseq"]
     __known_kits: ClassVar[List[str]] = ["QuantSeq", "NextSeq"]
     # __accepted_species: ClassVar[List[str]] = ["Homo_sapiens", "Mus_musculus"]
@@ -74,18 +76,32 @@ class Analysis:
         """
         The incoming folder with all external data.
         """
+        return self._incoming
+
+    def set_incoming(self):
+        incoming = Path("incoming")
         if "incoming" in self.project:
-            return Path(self.project["incoming"])
-        return Path("incoming")
+            incoming = Path(self.project["incoming"])
+        self._incoming = incoming
 
     @property
     def main_incoming(self):
         """
         The folder with all runs.
         """
+        return self._main_incoming
+
+    def set_main_incoming(self):
+        incoming = Path("/rose/ffs/incoming")
         if "main_incoming" in self.project:
-            return Path(self.project["main_incoming"]).resolve()
-        return Path("/rose/ffs/incoming")
+            incoming = Path(self.project["main_incoming"]).resolve()
+        self._main_incoming = incoming
+
+    def set_outpath(self):
+        if "outpath" in self.project:
+            self._outpath = Path(self.project["outpath"])
+        else:
+            self._outpath = Path("results")
 
     @property
     def analysis_type(self):
@@ -110,7 +126,7 @@ class Analysis:
 
     @property
     def path_to_samples_df(self):
-        return self.filepath_from_incoming(self.samples["df_samples"])
+        return self.filepath_from_incoming(self.samples["file"])
 
     @property
     def path_to_combination_df(self):
@@ -118,6 +134,10 @@ class Analysis:
         if filename is None:
             return None
         return self.filepath_from_incoming(filename)
+
+    @property
+    def outpath(self):
+        return self._outpath
 
     @classmethod
     def comparison_method_name(cls, comparison_dict_from_toml: Dict) -> str:
@@ -168,6 +188,10 @@ class Analysis:
         """
         Cleans up after initialization.
         """
+        self.set_main_incoming()
+        self.set_outpath()
+        self.set_incoming()
+        self.set_outpath()
         self.get_fastqs()
         self._verify()
         if ppg.inside_ppg():
@@ -175,17 +199,17 @@ class Analysis:
         else:
             print("outside ppg")
         self.set_genome()
-
         self.comparison_incoming = self.read_comparison_tables()
         self.verify_samples()
-        self.comparisons_to_do = self.parse_comparisons()
+        self.verify_groups()
+        # self.comparisons_to_do = self.parse_comparisons()
 
     def set_genome(self):
         print("setting genome")
         import pypipegraph2 as ppg
         import mbf
 
-        pypegraph = ppg.new()
+        # pypegraph = ppg.new()
         if self.alignment["species"] == "Mus_musculus":
             self._genome = genomes.Mus_musculus(self.alignment["revision"])
         elif self.alignment["species"] == "Homo_sapiens":
@@ -197,8 +221,8 @@ class Analysis:
                 )
             except:
                 raise
-        ppg.run()
-        self.jobs = pypegraph.jobs
+        # ppg.run()
+        # self.jobs = pypegraph.jobs
 
     def filepath_from_incoming(self, filename: str) -> Path:
         """
@@ -265,6 +289,8 @@ class Analysis:
         seen = set()
         df_in = self.get_comparison_group_table(comparison_group)
         method, options = self.comparison_method(comparison_group, method_name)
+        print(method, type(method))
+        raise ValueError()
         for _, row in df_in.iterrows():
             comparison_name = f"{row['comparison_name']}({method_name})"
             if comparison_name in seen:
@@ -281,8 +307,12 @@ class Analysis:
 
         return comparisons_to_do
 
+    def check_number_of_samples(self):
+        """check the number of samples"""
+        raise NotImplementedError
+
     def parse_multi_comparisons(
-        self, comparison_group: str, method_name: str, comparison_type: str
+        self, comparison_group: str, method_name: str, comparison_type: str, path: Path
     ):
         df_factor_path = self.filepath_from_incoming(self.comparison[comparison_group]["file"])
         multi_comparisons_to_do = {}
@@ -362,6 +392,8 @@ class Analysis:
                     self.parse_single_comparisons(group, method, comp_type, group_path)
                 )
             elif comp_type == "multi":
+                print(group, method, comp_type, group_path)
+                raise ValueError()
                 comparisons_to_do[group].update(
                     self.parse_multi_comparisons(group, method, comp_type, group_path)
                 )
@@ -415,7 +447,7 @@ class Analysis:
                 # TODO automatically pulling the data from rose/incoming ...
         # check samples
         if not Path(self.path_to_samples_df).exists():
-            raise FileNotFoundError(f"No samples.tsv in {self.incoming}. Please create it.")
+            raise FileNotFoundError(f"{self.path_to_samples_df} does not exist. Please create it.")
         kit = self.samples["kit"]
         if kit not in self.__known_kits:
             raise ValueError(
@@ -489,6 +521,32 @@ class Analysis:
             return pd.read_csv(self.path_to_combination_df, sep="\t")
         return None
 
+    def assert_required_columns(self, df_samples):
+        columns = ["number", "sample", "prefix", "comment", "vid"]
+        not_present = set(columns).difference(set(df_samples.columns.values))
+        if len(not_present) > 0:
+            raise ValueError(
+                f"The samples table {self.path_to_samples_df} does not contain the following required columns {not_present}.\nColumns were: {df_samples.columns.values}."
+            )
+
+    def assert_vid_unique(self, df_samples):
+        vids = df_samples["vid"].dropna()
+        duplicate_vids = vids[vids.duplicated()].values
+        if len(duplicate_vids) > 0:
+            raise ValueError(f"The following vids where assigned twice: {list(duplicate_vids)}.")
+
+    def assert_group_in_samples(self, group, df_samples):
+        if "factors" in self.comparison[group]:
+            missing = set(self.comparison[group]["factors"]).difference(set(df_samples.columns))
+            if len(missing) > 0:
+                raise ValueError(
+                    f"The sample table {str(self.path_to_samples_df)} is missing the following factors: {missing}"
+                )
+        elif group not in df_samples.columns:
+            raise ValueError(
+                f"No factors and no grouping column {group} found in {self.path_to_samples_df}. This is needed to define groups for comparisons."
+            )
+
     def verify_samples(self):
         """
         Checks the samples and groups tables that are supposed to be in incoming.
@@ -510,31 +568,24 @@ class Analysis:
             If the group table is missing required columns.
         """
         df_samples = self.sample_df()
-        columns = ["number", "sample", "prefix", "comment", "vid"]
-        not_present = set(columns).difference(set(df_samples.columns.values))
-        if len(not_present) > 0:
-            raise ValueError(
-                f"The samples table {self.path_to_samples_df} does not contain the following required columns {not_present}.\nColumns were: {df_samples.columns.values}."
-            )
-        group_columns = []
-        vids = df_samples["vid"].dropna()
-        duplicate_vids = vids[vids.duplicated()].values
-        if len(duplicate_vids) > 0:
-            raise ValueError(f"The following vids where assigned twice: {list(duplicate_vids)}.")
+        self.assert_required_columns(df_samples)
+        self.assert_vid_unique(df_samples)
         for group in self.comparison:
-            if group in df_samples.columns:
-                group_columns.append(group)
-        if len(group_columns) == 0:
-            raise ValueError(
-                f"No grouping column found in {self.path_to_samples_df}. This is needed to define groups for comparisons."
-            )
+            self.assert_group_in_samples(group, df_samples)
+
+    def verify_groups(self):
+        ab_columns_needed = ["a", "b", "groupby", "comparison_name", "comment"]
+        multi_columns_needed = ["factors", "comparison_name", "comment"]
         for group in self.comparison:
+            not_present = []
             df_groups = self.get_comparison_group_table(group)
-            columns = ["a", "b", "comparison_name", "comment"]
-            not_present = set(columns).difference(set(df_groups.columns.values))
+            if self.comparison[group]["type"] == "ab":
+                not_present = set(ab_columns_needed).difference(set(df_groups.columns.values))
+            elif self.comparison[group]["type"] == "multi":
+                not_present = set(multi_columns_needed).difference(set(df_groups.columns.values))
             if len(not_present) > 0:
                 raise ValueError(
-                    f"The groups table {str(group_path)} does not contain the following required columns {not_present}."
+                    f"The groups table for {group} does not contain the following required columns {not_present}."
                 )
 
     def fastq_processor(self) -> Any:
@@ -584,34 +635,34 @@ class Analysis:
         else:
             raise NotImplementedError  # TODO: read processor from toml for more fine-grained control
 
-    def raw_counter(self) -> _FastTagCounter:
-        kit = self.samples["kit"]
-        stranded = self.samples["stranded"]
-        if kit == "QuantSeq":
-            if stranded:
-                return genomics.genes.anno_tag_counts.ExonSmartStrandedRust
-            else:
-                raise NotImplementedError
-        elif kit == "NextSeq":
-            if stranded:
-                return genomics.genes.anno_tag_counts.ExonSmartStrandedRust
-            else:
-                raise NotImplementedError
-        else:
-            raise NotImplementedError  # TODO: to toml for more fine-grained control
+    # def raw_counter(self) -> _FastTagCounter:
+    #     kit = self.samples["kit"]
+    #     stranded = self.samples["stranded"]
+    #     if kit == "QuantSeq":
+    #         if stranded:
+    #             return genomics.genes.anno_tag_counts.ExonSmartStrandedRust
+    #         else:
+    #             raise NotImplementedError
+    #     elif kit == "NextSeq":
+    #         if stranded:
+    #             return genomics.genes.anno_tag_counts.ExonSmartStrandedRust
+    #         else:
+    #             raise NotImplementedError
+    #     else:
+    #         raise NotImplementedError  # TODO: to toml for more fine-grained control
 
-    def norm_counter(self) -> _NormalizationAnno:
-        kit = self.samples["kit"]
-        stranded = self.samples["stranded"]
-        if stranded:
-            if kit == "QuantSeq":
-                return genomics.genes.anno_tag_counts.NormalizationCPM
-            elif kit == "NextSeq":
-                return genomics.genes.anno_tag_counts.NormalizationTPM
-            else:
-                raise NotImplementedError  # TODO: to toml for more fine-grained control
-        else:
-            raise NotImplementedError
+    # def norm_counter(self) -> _NormalizationAnno:
+    #     kit = self.samples["kit"]
+    #     stranded = self.samples["stranded"]
+    #     if stranded:
+    #         if kit == "QuantSeq":
+    #             return genomics.genes.anno_tag_counts.NormalizationCPM
+    #         elif kit == "NextSeq":
+    #             return genomics.genes.anno_tag_counts.NormalizationTPM
+    #         else:
+    #             raise NotImplementedError  # TODO: to toml for more fine-grained control
+    #     else:
+    #         raise NotImplementedError
 
     def report(self) -> NB:
         """
@@ -702,19 +753,30 @@ class Analysis:
             If the method is not found in the module.
         """
         module = sys.modules["mbf.comparisons.methods"]
-        if not hasattr(module, method):
-            raise ValueError(f"No method named {method} found in comparisons.methods.py.")
-        method_ = getattr(module, method)
+        if hasattr(module, method):
+            method_ = getattr(module, method)
+        else:
+            module = sys.modules["mdataframe.differential"]
+            if hasattr(module, method):
+                method_ = getattr(module, method)
+            else:
+                raise ValueError(
+                    f"No method named {method} found in mbf.comparisons.methods.py or mdataframe.differential.py."
+                )
         options = {
             "laplace_offset": self.comparison[group_name].get("laplace_offset", 0),
             "include_other_samples_for_variance": self.comparison[group_name].get(
                 "include_other_samples_for_variance", True
             ),
         }
+        print(group_name, method, self.comparison[group_name], method_)
         if "parameters" in self.comparison[group_name]:
             parameters = self.comparison[group_name]["parameters"]
+            print("called with parameters")
+            print
             return method_(**parameters), options
         else:
+            print("called without parameters")
             return method_(), options
 
     def deg_filter_expressions(self, comparison_group: str) -> List[Any]:
@@ -734,9 +796,9 @@ class Analysis:
         List[Any]
             List of filter expressions.
         """
-        default = [[["FDR", "<=", 0.05], ["log2FC", "|>", 1]]]
+        default = [[["FDR", "<=", 0.05], ["logFC", "|>", 1]]]
         if "filter_expressions" in self.comparison[comparison_group]:
-            expr = self.comparison[comparison_group]["filter_expressions"]
+            expr = toml_arrays_to_lists(self.comparison[comparison_group]["filter_expressions"])
             return expr
         else:
             return default
@@ -863,11 +925,11 @@ class Analysis:
                     desc = f"- compare {comparison_name} with {factors} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
                     report_header += desc
         report_header += "\n### Pathway Analysis  \n"
-        for pathway_method in self.pathway_analysis:
+        for pathway_method in self.pathways:
             parameter = {}
-            if "parameters" in self.pathway_analysis[pathway_method]:
-                parameter = self.pathway_analysis[pathway_method]["parameters"]
-            collections = self.pathway_collections(self.pathway_analysis[pathway_method])
+            if "parameters" in self.pathways[pathway_method]:
+                parameter = self.pathways[pathway_method]["parameters"]
+            collections = self.pathway_collections(self.pathways[pathway_method])
             if pathway_method == "ora":
                 report_header += "\nOver-Representation Analysis (ORA)  \n"
             if pathway_method == "gsea":
@@ -895,7 +957,7 @@ class Analysis:
     def combinations(self) -> Iterator:
         """
         Returns an Iterator over all set operations to be performed. This
-        is just read from the combinations file.
+        just reads from the combinations file.
 
         Returns
         -------
@@ -916,42 +978,53 @@ class Analysis:
                 condition_group = row["condition_group"]
                 new_name_prefix = row["combined_name"]
                 comparisons_to_add = row["comparison_names"].split(",")
+                generator = self.get_generator(row["operation"])
                 assert_uniqueness(comparisons_to_add)
-                if row["operation"] == "difference":
-                    operations = "Set difference"
+                yield condition_group, new_name_prefix, comparisons_to_add, generator, row[
+                    "operation"
+                ]
 
-                    def generator(new_name, genes_to_combine):
-                        return genomics.genes.genes_from.FromDifference(
-                            new_name,
-                            genes_to_combine[0],
-                            genes_to_combine[1:],
-                            sheet_name="Differences",
-                        )
+    def get_generator(self, operation):
+        def generator_diff(new_name, genes_to_combine):
+            return genomics.genes.genes_from.FromDifference(
+                new_name,
+                genes_to_combine[0],
+                genes_to_combine[1],
+                sheet_name="Differences",
+            )
 
-                elif row["operation"] == "intersection":
-                    operations = "Intersection"
+        def generator_intersect(new_name, genes_to_combine):
+            return genomics.genes.genes_from.FromIntersection(
+                new_name, genes_to_combine, sheet_name="Intersections"
+            )
 
-                    def generator(new_name, genes_to_combine):
-                        return genomics.genes.genes_from.FromIntersection(
-                            new_name, genes_to_combine, sheet_name="Intersections"
-                        )
+        def generator_union(new_name, genes_to_combine):
+            return genomics.genes.genes_from.FromAny(
+                new_name, genes_to_combine, sheet_name="Unions"
+            )
 
-                elif row["operation"] == "union":
-                    operations = "Union"
-
-                    def generator(new_name, genes_to_combine):
-                        return genomics.genes.genes_from.FromAny(
-                            new_name, genes_to_combine, sheet_name="Unions"
-                        )
-
-                else:
-                    raise NotImplementedError(
-                        f"Unknown set operation specified: {row['operation']}"
-                    )
-                yield condition_group, new_name_prefix, comparisons_to_add, generator, operations
+        if operation == "difference":
+            generator = generator_diff
+        elif operation == "intersection":
+            generator = generator_intersect
+        elif operation == "union":
+            generator = generator_union
+        else:
+            raise NotImplementedError(f"Unknown set operation specified: {row['operation']}")
+        return generator
 
     def get_fastqs(self):
         fill_incoming(self.run_ids, self.main_incoming, self.incoming)
+
+    def get_collections_for_runner(self, pathway_method):
+        collections = ["h"]
+        if "collections" in self.pathways[pathway_method]:
+            collections = list(self.pathways[pathway_method]["collections"])
+        collections_to_run = [collections] + [collection for collection in collections]
+        return collections_to_run
+
+    def get_gsea_parameter(self):
+        return dict(self.pathways["gsea"].get("parameter", {}))
 
 
 def analysis(req_file: Path = Path("run.toml")) -> Analysis:
@@ -969,3 +1042,7 @@ def analysis(req_file: Path = Path("run.toml")) -> Analysis:
         A new Analysis instance.
     """
     return Analysis(req_file, **read_toml(req_file))
+
+
+def toml_arrays_to_lists(toml_array) -> List:
+    return [[list(expression) for expression in filter_set] for filter_set in toml_array]

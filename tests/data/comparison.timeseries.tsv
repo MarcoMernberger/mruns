@@ -1,0 +1,2 @@
+comparison_name	factors	values	groupby	comment
+Multifactor_comparison	factor1,factor2	1	ts	timeseries multifactor

@@ -1,0 +1,397 @@
+JobId: results/Genes/C_vs_D(B)_FDR<=0.05_logFC<=1/ORA/C_vs_D(B)_FDR<=0.05_logFC<=1_ORA(h).tsv
+Class: FileGeneratingJob
+Input jobs:
+	FIresults/Genes/C_vs_D(B)_FDR<=0.05_logFC<=1/ORA/C_vs_D(B)_FDR<=0.05_logFC<=1_ORA(h).tsv (FunctionInvariant)
+	cache/HE/ORA(h)/sets (FileGeneratingJob)
+	cache/gmt/h.all.v7.1/Homo_sapiens/ensembl.gmt (FileGeneratingJob)
+	load_cache/Genes/C_vs_D(B)_FDR<=0.05_logFC<=1/calc (DataLoadingJob)
+	load_cache/Genes/Genes_MockGenome_chr_biotypes_thresholds_drop_empty_names/calc (DataLoadingJob)
+	load_cache/HE/ORA(h)/sets (AttributeLoadingJob)
+
+
+Exception: KeyError 'B'
+{bold('Traceback')} (most recent call last):
+/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/core/indexes/base.py":3803, in get_loc
+	  3800             casted_key = self._maybe_cast_indexer(key)
+	  3801             try:
+	> 3802                 return self._engine.get_loc(casted_key)
+	  3803             except KeyError as err:
+	  3804                 raise KeyError(key) from err
+	  3805             except TypeError:
+Locals:
+	casted_key = B
+	       key = B
+	    method = None
+	      self = Index(['chr', 'tss', 'tes', 'strand', 'biotype', 'name'], dtype='object')
+	 tolerance = None
+
+/project/code/mruns/tests/run/.test_pathways/pandas/_libs/index.pyx":138, in pandas._libs.index.IndexEngine.get_loc
+# no source available
+Locals:
+	               BaseMultiIndexCodesEngine = <class 'pandas._libs.index.BaseMultiIndexCodesEngine'>
+	                              BoolEngine = <class 'pandas._libs.index.BoolEngine'>
+	                        Complex128Engine = <class 'pandas._libs.index.Complex128Engine'>
+	                         Complex64Engine = <class 'pandas._libs.index.Complex64Engine'>
+	                          DatetimeEngine = <class 'pandas._libs.index.DatetimeEngine'>
+	                         ExtensionEngine = <class 'pandas._libs.index.ExtensionEngine'>
+	                           Float32Engine = <class 'pandas._libs.index.Float32Engine'>
+	                           Float64Engine = <class 'pandas._libs.index.Float64Engine'>
+	                             IndexEngine = <class 'pandas._libs.index.IndexEngine'>
+	                             Int16Engine = <class 'pandas._libs.index.Int16Engine'>
+	                             Int32Engine = <class 'pandas._libs.index.Int32Engine'>
+	                             Int64Engine = <class 'pandas._libs.index.Int64Engine'>
+	                              Int8Engine = <class 'pandas._libs.index.Int8Engine'>
+	                            ObjectEngine = <class 'pandas._libs.index.ObjectEngine'>
+	                            PeriodEngine = <class 'pandas._libs.index.PeriodEngine'>
+	                         TimedeltaEngine = <class 'pandas._libs.index.TimedeltaEngine'>
+	                            UInt16Engine = <class 'pandas._libs.index.UInt16Engine'>
+	                            UInt32Engine = <class 'pandas._libs.index.UInt32Engine'>
+	                            UInt64Engine = <class 'pandas._libs.index.UInt64Engine'>
+	                             UInt8Engine = <class 'pandas._libs.index.UInt8Engine'>
+	                            _SIZE_CUTOFF = 1000000
+	                            __builtins__ = <module 'builtins' (built-in)>
+	                                 __doc__ = None
+	                                __file__ = /nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/index.cpython-39-x86_64-linux-gnu.so
+	                              __loader__ = <_frozen_importlib_external.ExtensionFileLoader object at 0x7f4544a22ee0>
+	                                __name__ = pandas._libs.index
+	                             __package__ = pandas._libs
+	__pyx_unpickle_BaseMultiIndexCodesEngine = <built-in function __pyx_unpickle_BaseMultiIndexCodesEngine>
+	               __pyx_unpickle_BoolEngine = <built-in function __pyx_unpickle_BoolEngine>
+	         __pyx_unpickle_Complex128Engine = <built-in function __pyx_unpickle_Complex128Engine>
+	          __pyx_unpickle_Complex64Engine = <built-in function __pyx_unpickle_Complex64Engine>
+	           __pyx_unpickle_DatetimeEngine = <built-in function __pyx_unpickle_DatetimeEngine>
+	                     __pyx_unpickle_Enum = <built-in function __pyx_unpickle_Enum>
+	          __pyx_unpickle_ExtensionEngine = <built-in function __pyx_unpickle_ExtensionEngine>
+	            __pyx_unpickle_Float32Engine = <built-in function __pyx_unpickle_Float32Engine>
+	            __pyx_unpickle_Float64Engine = <built-in function __pyx_unpickle_Float64Engine>
+	              __pyx_unpickle_IndexEngine = <built-in function __pyx_unpickle_IndexEngine>
+	              __pyx_unpickle_Int16Engine = <built-in function __pyx_unpickle_Int16Engine>
+	              __pyx_unpickle_Int32Engine = <built-in function __pyx_unpickle_Int32Engine>
+	              __pyx_unpickle_Int64Engine = <built-in function __pyx_unpickle_Int64Engine>
+	               __pyx_unpickle_Int8Engine = <built-in function __pyx_unpickle_Int8Engine>
+	             __pyx_unpickle_ObjectEngine = <built-in function __pyx_unpickle_ObjectEngine>
+	             __pyx_unpickle_PeriodEngine = <built-in function __pyx_unpickle_PeriodEngine>
+	             __pyx_unpickle_SharedEngine = <built-in function __pyx_unpickle_SharedEngine>
+	          __pyx_unpickle_TimedeltaEngine = <built-in function __pyx_unpickle_TimedeltaEngine>
+	             __pyx_unpickle_UInt16Engine = <built-in function __pyx_unpickle_UInt16Engine>
+	             __pyx_unpickle_UInt32Engine = <built-in function __pyx_unpickle_UInt32Engine>
+	             __pyx_unpickle_UInt64Engine = <built-in function __pyx_unpickle_UInt64Engine>
+	              __pyx_unpickle_UInt8Engine = <built-in function __pyx_unpickle_UInt8Engine>
+	                                __spec__ = ModuleSpec(name='pandas._libs.index', loader=<_frozen_importlib_external.ExtensionFileLoader object at 0x7f4544a22ee0>, origin='/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/index.cpython-39-x86_64-linux-gnu.so')
+	                                __test__ = {}
+	                                   _hash = <module 'pandas._libs.hashtable' from '/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/hashtable.cpython-39-x86_64-linux-gnu.so'>
+	                                   algos = <module 'pandas._libs.algos' from '/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/algos.cpython-39-x86_64-linux-gnu.so'>
+	                                      np = <module 'numpy' from '/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/numpy/__init__.py'>
+
+/project/code/mruns/tests/run/.test_pathways/pandas/_libs/index.pyx":165, in pandas._libs.index.IndexEngine.get_loc
+# no source available
+Locals:
+	               BaseMultiIndexCodesEngine = <class 'pandas._libs.index.BaseMultiIndexCodesEngine'>
+	                              BoolEngine = <class 'pandas._libs.index.BoolEngine'>
+	                        Complex128Engine = <class 'pandas._libs.index.Complex128Engine'>
+	                         Complex64Engine = <class 'pandas._libs.index.Complex64Engine'>
+	                          DatetimeEngine = <class 'pandas._libs.index.DatetimeEngine'>
+	                         ExtensionEngine = <class 'pandas._libs.index.ExtensionEngine'>
+	                           Float32Engine = <class 'pandas._libs.index.Float32Engine'>
+	                           Float64Engine = <class 'pandas._libs.index.Float64Engine'>
+	                             IndexEngine = <class 'pandas._libs.index.IndexEngine'>
+	                             Int16Engine = <class 'pandas._libs.index.Int16Engine'>
+	                             Int32Engine = <class 'pandas._libs.index.Int32Engine'>
+	                             Int64Engine = <class 'pandas._libs.index.Int64Engine'>
+	                              Int8Engine = <class 'pandas._libs.index.Int8Engine'>
+	                            ObjectEngine = <class 'pandas._libs.index.ObjectEngine'>
+	                            PeriodEngine = <class 'pandas._libs.index.PeriodEngine'>
+	                         TimedeltaEngine = <class 'pandas._libs.index.TimedeltaEngine'>
+	                            UInt16Engine = <class 'pandas._libs.index.UInt16Engine'>
+	                            UInt32Engine = <class 'pandas._libs.index.UInt32Engine'>
+	                            UInt64Engine = <class 'pandas._libs.index.UInt64Engine'>
+	                             UInt8Engine = <class 'pandas._libs.index.UInt8Engine'>
+	                            _SIZE_CUTOFF = 1000000
+	                            __builtins__ = <module 'builtins' (built-in)>
+	                                 __doc__ = None
+	                                __file__ = /nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/index.cpython-39-x86_64-linux-gnu.so
+	                              __loader__ = <_frozen_importlib_external.ExtensionFileLoader object at 0x7f4544a22ee0>
+	                                __name__ = pandas._libs.index
+	                             __package__ = pandas._libs
+	__pyx_unpickle_BaseMultiIndexCodesEngine = <built-in function __pyx_unpickle_BaseMultiIndexCodesEngine>
+	               __pyx_unpickle_BoolEngine = <built-in function __pyx_unpickle_BoolEngine>
+	         __pyx_unpickle_Complex128Engine = <built-in function __pyx_unpickle_Complex128Engine>
+	          __pyx_unpickle_Complex64Engine = <built-in function __pyx_unpickle_Complex64Engine>
+	           __pyx_unpickle_DatetimeEngine = <built-in function __pyx_unpickle_DatetimeEngine>
+	                     __pyx_unpickle_Enum = <built-in function __pyx_unpickle_Enum>
+	          __pyx_unpickle_ExtensionEngine = <built-in function __pyx_unpickle_ExtensionEngine>
+	            __pyx_unpickle_Float32Engine = <built-in function __pyx_unpickle_Float32Engine>
+	            __pyx_unpickle_Float64Engine = <built-in function __pyx_unpickle_Float64Engine>
+	              __pyx_unpickle_IndexEngine = <built-in function __pyx_unpickle_IndexEngine>
+	              __pyx_unpickle_Int16Engine = <built-in function __pyx_unpickle_Int16Engine>
+	              __pyx_unpickle_Int32Engine = <built-in function __pyx_unpickle_Int32Engine>
+	              __pyx_unpickle_Int64Engine = <built-in function __pyx_unpickle_Int64Engine>
+	               __pyx_unpickle_Int8Engine = <built-in function __pyx_unpickle_Int8Engine>
+	             __pyx_unpickle_ObjectEngine = <built-in function __pyx_unpickle_ObjectEngine>
+	             __pyx_unpickle_PeriodEngine = <built-in function __pyx_unpickle_PeriodEngine>
+	             __pyx_unpickle_SharedEngine = <built-in function __pyx_unpickle_SharedEngine>
+	          __pyx_unpickle_TimedeltaEngine = <built-in function __pyx_unpickle_TimedeltaEngine>
+	             __pyx_unpickle_UInt16Engine = <built-in function __pyx_unpickle_UInt16Engine>
+	             __pyx_unpickle_UInt32Engine = <built-in function __pyx_unpickle_UInt32Engine>
+	             __pyx_unpickle_UInt64Engine = <built-in function __pyx_unpickle_UInt64Engine>
+	              __pyx_unpickle_UInt8Engine = <built-in function __pyx_unpickle_UInt8Engine>
+	                                __spec__ = ModuleSpec(name='pandas._libs.index', loader=<_frozen_importlib_external.ExtensionFileLoader object at 0x7f4544a22ee0>, origin='/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/index.cpython-39-x86_64-linux-gnu.so')
+	                                __test__ = {}
+	                                   _hash = <module 'pandas._libs.hashtable' from '/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/hashtable.cpython-39-x86_64-linux-gnu.so'>
+	                                   algos = <module 'pandas._libs.algos' from '/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/algos.cpython-39-x86_64-linux-gnu.so'>
+	                                      np = <module 'numpy' from '/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/numpy/__init__.py'>
+
+/project/code/mruns/tests/run/.test_pathways/pandas/_libs/hashtable_class_helper.pxi":5745, in pandas._libs.hashtable.PyObjectHashTable.get_item
+# no source available
+Locals:
+	        Complex128HashTable = <class 'pandas._libs.hashtable.Complex128HashTable'>
+	           Complex128Vector = <class 'pandas._libs.hashtable.Complex128Vector'>
+	         Complex64HashTable = <class 'pandas._libs.hashtable.Complex64HashTable'>
+	            Complex64Vector = <class 'pandas._libs.hashtable.Complex64Vector'>
+	                 Factorizer = <class 'pandas._libs.hashtable.Factorizer'>
+	           Float32HashTable = <class 'pandas._libs.hashtable.Float32HashTable'>
+	              Float32Vector = <class 'pandas._libs.hashtable.Float32Vector'>
+	           Float64HashTable = <class 'pandas._libs.hashtable.Float64HashTable'>
+	              Float64Vector = <class 'pandas._libs.hashtable.Float64Vector'>
+	                  HashTable = <class 'pandas._libs.hashtable.HashTable'>
+	             Int16HashTable = <class 'pandas._libs.hashtable.Int16HashTable'>
+	                Int16Vector = <class 'pandas._libs.hashtable.Int16Vector'>
+	             Int32HashTable = <class 'pandas._libs.hashtable.Int32HashTable'>
+	                Int32Vector = <class 'pandas._libs.hashtable.Int32Vector'>
+	            Int64Factorizer = <class 'pandas._libs.hashtable.Int64Factorizer'>
+	             Int64HashTable = <class 'pandas._libs.hashtable.Int64HashTable'>
+	                Int64Vector = <class 'pandas._libs.hashtable.Int64Vector'>
+	              Int8HashTable = <class 'pandas._libs.hashtable.Int8HashTable'>
+	                 Int8Vector = <class 'pandas._libs.hashtable.Int8Vector'>
+	              IntpHashTable = <class 'pandas._libs.hashtable.Int64HashTable'>
+	           ObjectFactorizer = <class 'pandas._libs.hashtable.ObjectFactorizer'>
+	               ObjectVector = <class 'pandas._libs.hashtable.ObjectVector'>
+	          PyObjectHashTable = <class 'pandas._libs.hashtable.PyObjectHashTable'>
+	            SIZE_HINT_LIMIT = 1048583
+	            StringHashTable = <class 'pandas._libs.hashtable.StringHashTable'>
+	               StringVector = <class 'pandas._libs.hashtable.StringVector'>
+	            UInt16HashTable = <class 'pandas._libs.hashtable.UInt16HashTable'>
+	               UInt16Vector = <class 'pandas._libs.hashtable.UInt16Vector'>
+	            UInt32HashTable = <class 'pandas._libs.hashtable.UInt32HashTable'>
+	               UInt32Vector = <class 'pandas._libs.hashtable.UInt32Vector'>
+	            UInt64HashTable = <class 'pandas._libs.hashtable.UInt64HashTable'>
+	               UInt64Vector = <class 'pandas._libs.hashtable.UInt64Vector'>
+	             UInt8HashTable = <class 'pandas._libs.hashtable.UInt8HashTable'>
+	                UInt8Vector = <class 'pandas._libs.hashtable.UInt8Vector'>
+	                     Vector = <class 'pandas._libs.hashtable.Vector'>
+	               __builtins__ = <module 'builtins' (built-in)>
+	                    __doc__ = None
+	                   __file__ = /nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/hashtable.cpython-39-x86_64-linux-gnu.so
+	                 __loader__ = <_frozen_importlib_external.ExtensionFileLoader object at 0x7f454a741a30>
+	                   __name__ = pandas._libs.hashtable
+	                __package__ = pandas._libs
+	        __pyx_unpickle_Enum = <built-in function __pyx_unpickle_Enum>
+	   __pyx_unpickle_HashTable = <built-in function __pyx_unpickle_HashTable>
+	                   __spec__ = ModuleSpec(name='pandas._libs.hashtable', loader=<_frozen_importlib_external.ExtensionFileLoader object at 0x7f454a741a30>, origin='/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/hashtable.cpython-39-x86_64-linux-gnu.so')
+	                   __test__ = {'ObjectFactorizer.factorize (line 101)': "\n\n        Returns\n        -------\n        np.ndarray[np.intp]\n\n        Examples\n        --------\n        Factorize values with nans replaced by na_sentinel\n\n        >>> fac = ObjectFactorizer(3)\n        >>> fac.factorize(np.array([1,2,np.nan], dtype='O'), na_sentinel=20)\n        array([ 0,  1, 20])\n        ", 'Int64Factorizer.factorize (line 148)': '\n        Returns\n        -------\n        ndarray[intp_t]\n\n        Examples\n        --------\n        Factorize values with nans replaced by na_sentinel\n\n        >>> fac = Int64Factorizer(3)\n        >>> fac.factorize(np.array([1,2,3]), na_sentinel=20)\n        array([0, 1, 2])\n        '}
+	_unique_label_indices_int32 = <built-in function _unique_label_indices_int32>
+	_unique_label_indices_int64 = <built-in function _unique_label_indices_int64>
+	                 duplicated = <cyfunction duplicated at 0x7f4549e46900>
+	 get_hashtable_trace_domain = <built-in function get_hashtable_trace_domain>
+	                   ismember = <cyfunction ismember at 0x7f4549e47580>
+	                       mode = <cyfunction mode at 0x7f4549e49200>
+	                         np = <module 'numpy' from '/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/numpy/__init__.py'>
+	                object_hash = <built-in function object_hash>
+	          objects_are_equal = <built-in function objects_are_equal>
+	       unique_label_indices = <built-in function _unique_label_indices_int64>
+	                value_count = <cyfunction value_count at 0x7f4549e43c80>
+
+/project/code/mruns/tests/run/.test_pathways/pandas/_libs/hashtable_class_helper.pxi":5753, in pandas._libs.hashtable.PyObjectHashTable.get_item
+# no source available
+Locals:
+	        Complex128HashTable = <class 'pandas._libs.hashtable.Complex128HashTable'>
+	           Complex128Vector = <class 'pandas._libs.hashtable.Complex128Vector'>
+	         Complex64HashTable = <class 'pandas._libs.hashtable.Complex64HashTable'>
+	            Complex64Vector = <class 'pandas._libs.hashtable.Complex64Vector'>
+	                 Factorizer = <class 'pandas._libs.hashtable.Factorizer'>
+	           Float32HashTable = <class 'pandas._libs.hashtable.Float32HashTable'>
+	              Float32Vector = <class 'pandas._libs.hashtable.Float32Vector'>
+	           Float64HashTable = <class 'pandas._libs.hashtable.Float64HashTable'>
+	              Float64Vector = <class 'pandas._libs.hashtable.Float64Vector'>
+	                  HashTable = <class 'pandas._libs.hashtable.HashTable'>
+	             Int16HashTable = <class 'pandas._libs.hashtable.Int16HashTable'>
+	                Int16Vector = <class 'pandas._libs.hashtable.Int16Vector'>
+	             Int32HashTable = <class 'pandas._libs.hashtable.Int32HashTable'>
+	                Int32Vector = <class 'pandas._libs.hashtable.Int32Vector'>
+	            Int64Factorizer = <class 'pandas._libs.hashtable.Int64Factorizer'>
+	             Int64HashTable = <class 'pandas._libs.hashtable.Int64HashTable'>
+	                Int64Vector = <class 'pandas._libs.hashtable.Int64Vector'>
+	              Int8HashTable = <class 'pandas._libs.hashtable.Int8HashTable'>
+	                 Int8Vector = <class 'pandas._libs.hashtable.Int8Vector'>
+	              IntpHashTable = <class 'pandas._libs.hashtable.Int64HashTable'>
+	           ObjectFactorizer = <class 'pandas._libs.hashtable.ObjectFactorizer'>
+	               ObjectVector = <class 'pandas._libs.hashtable.ObjectVector'>
+	          PyObjectHashTable = <class 'pandas._libs.hashtable.PyObjectHashTable'>
+	            SIZE_HINT_LIMIT = 1048583
+	            StringHashTable = <class 'pandas._libs.hashtable.StringHashTable'>
+	               StringVector = <class 'pandas._libs.hashtable.StringVector'>
+	            UInt16HashTable = <class 'pandas._libs.hashtable.UInt16HashTable'>
+	               UInt16Vector = <class 'pandas._libs.hashtable.UInt16Vector'>
+	            UInt32HashTable = <class 'pandas._libs.hashtable.UInt32HashTable'>
+	               UInt32Vector = <class 'pandas._libs.hashtable.UInt32Vector'>
+	            UInt64HashTable = <class 'pandas._libs.hashtable.UInt64HashTable'>
+	               UInt64Vector = <class 'pandas._libs.hashtable.UInt64Vector'>
+	             UInt8HashTable = <class 'pandas._libs.hashtable.UInt8HashTable'>
+	                UInt8Vector = <class 'pandas._libs.hashtable.UInt8Vector'>
+	                     Vector = <class 'pandas._libs.hashtable.Vector'>
+	               __builtins__ = <module 'builtins' (built-in)>
+	                    __doc__ = None
+	                   __file__ = /nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/hashtable.cpython-39-x86_64-linux-gnu.so
+	                 __loader__ = <_frozen_importlib_external.ExtensionFileLoader object at 0x7f454a741a30>
+	                   __name__ = pandas._libs.hashtable
+	                __package__ = pandas._libs
+	        __pyx_unpickle_Enum = <built-in function __pyx_unpickle_Enum>
+	   __pyx_unpickle_HashTable = <built-in function __pyx_unpickle_HashTable>
+	                   __spec__ = ModuleSpec(name='pandas._libs.hashtable', loader=<_frozen_importlib_external.ExtensionFileLoader object at 0x7f454a741a30>, origin='/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/_libs/hashtable.cpython-39-x86_64-linux-gnu.so')
+	                   __test__ = {'ObjectFactorizer.factorize (line 101)': "\n\n        Returns\n        -------\n        np.ndarray[np.intp]\n\n        Examples\n        --------\n        Factorize values with nans replaced by na_sentinel\n\n        >>> fac = ObjectFactorizer(3)\n        >>> fac.factorize(np.array([1,2,np.nan], dtype='O'), na_sentinel=20)\n        array([ 0,  1, 20])\n        ", 'Int64Factorizer.factorize (line 148)': '\n        Returns\n        -------\n        ndarray[intp_t]\n\n        Examples\n        --------\n        Factorize values with nans replaced by na_sentinel\n\n        >>> fac = Int64Factorizer(3)\n        >>> fac.factorize(np.array([1,2,3]), na_sentinel=20)\n        array([0, 1, 2])\n        '}
+	_unique_label_indices_int32 = <built-in function _unique_label_indices_int32>
+	_unique_label_indices_int64 = <built-in function _unique_label_indices_int64>
+	                 duplicated = <cyfunction duplicated at 0x7f4549e46900>
+	 get_hashtable_trace_domain = <built-in function get_hashtable_trace_domain>
+	                   ismember = <cyfunction ismember at 0x7f4549e47580>
+	                       mode = <cyfunction mode at 0x7f4549e49200>
+	                         np = <module 'numpy' from '/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/numpy/__init__.py'>
+	                object_hash = <built-in function object_hash>
+	          objects_are_equal = <built-in function objects_are_equal>
+	       unique_label_indices = <built-in function _unique_label_indices_int64>
+	                value_count = <cyfunction value_count at 0x7f4549e43c80>
+
+Exception (repeated from above): KeyError 'B'
+
+The above exception cause to the following one
+Exception: KeyError 'B'
+{bold('Traceback')} (most recent call last):
+/anysnake2/venv/linked_in/pypipegraph2/src/pypipegraph2/jobs.py":783, in run
+	  780 
+	  781                         try:
+	> 782                             self.generating_function(*input)
+	  783                             stdout.flush()
+	  784                             stderr.flush()
+	  785                             # else:
+Locals:
+	          aborted = <function MultiFileGeneratingJob.run.<locals>.aborted at 0x7f45681efee0>
+	      all_present = False
+	      captured_tb = None
+	      del_counter = 0
+	                e = 'B'
+	  error_exit_code = 1
+	    exception_out = <_io.BufferedRandom name='.ppg/run/112.exception'>
+	   exception_type = <class 'KeyError'>
+	  exception_value = 'B'
+	               fn = results/Genes/C_vs_D(B)_FDR<=0.05_logFC<=1/ORA/C_vs_D(B)_FDR<=0.05_logFC<=1_ORA(h).tsv
+	historical_output = {}
+	            input = (PosixPath('results/Genes/C_vs_D(B)_FDR<=0.05_logFC<=1/ORA/C_vs_D(B)_FDR<=0.05_logFC<=1_ORA(h).tsv'),)
+	           runner = <pypipegraph2.runner.Runner object at 0x7f456aab6190>
+	             self = FileGeneratingJob: results/Genes/C_vs_D(B)_FDR<=0.05_logFC<=1/ORA/C_vs_D(B)_FDR<=0.05_logFC<=1_ORA(h).tsv
+	           stderr = <_io.TextIOWrapper name='.ppg/run/1679409006.08_112.stderr' mode='w+' encoding='UTF-8'>
+	          stderr_ = <_io.TextIOWrapper name="<_io.FileIO name=8 mode='rb+' closefd=True>" mode='r+' encoding='utf-8'>
+	           stdout = <_io.TextIOWrapper name='.ppg/run/1679409006.08_112.stdout' mode='w+' encoding='UTF-8'>
+	          stdout_ = <_io.TextIOWrapper name="<_io.FileIO name=6 mode='rb+' closefd=True>" mode='r+' encoding='utf-8'>
+	               tb = <traceback object at 0x7f456821d180>
+	 traceback_dumped = False
+
+/anysnake2/venv/linked_in/mpathways/src/mpathways/ora.py":180, in __run
+	  177                 genes_str = ", ".join(list(sorted(drawn)))
+	  178                 result["Genes"].append(genes_str)
+	> 179                 gene_names = [get_gene_name(x) for x in list(sorted(drawn))]
+	  180                 gene_names = ", ".join(gene_names)
+	  181                 result["GeneNames"].append(gene_names)
+	  182             df = pd.DataFrame(result)
+Locals:
+	                       description = {'HALLMARK_TNFA_SIGNALING_VIA_NFKB': 'http://www.gsea-msigdb.org/gsea/msigdb/cards/HALLMARK_TNFA_SIGNALING_VIA_NFKB', 'HALLMARK_HYPOXIA': 'http://www.gsea-msigdb.org/gsea/msigdb/cards/HALLMARK_HYPOXIA', 'HALLMARK_CHOLESTEROL_HOMEOSTASIS': 'http://www.gsea-msigdb.org/gsea/msigdb/cards/HALLMARK_CHOLESTEROL_HOMEOSTASIS', 'HALLMARK_MITOTIC_SPINDLE': 'http://www.gsea-msigdb.org/gsea/msigdb/cards/HALLMARK_MITOTIC_SPINDLE', 'HALLMARK_WNT_BETA_CATENIN_SIGNALING': 'http://www.gsea-msigdb.org/gsea/msigdb/cards/HALLMARK_WNT_BETA_CATENIN_SIGNALING', 'HALLMARK_TGF_BETA_SIGNALING': 'http://www.gsea-msigdb.org/gsea/msigdb/cards/HALLMARK_TGF_BETA_SIGNALING', 'HALLMARK_IL6_JAK_STAT3_SIGNALING': 'http://www.gsea-msigdb.org/gsea/msigdb/cards/HALLMARK_IL6_JAK_STAT3_SIGNALING', 'HALLMARK_DNA_REPAIR': 'http://www.gsea-msigdb.org/gsea/msigdb/cards/HALLMARK_DNA_REPAIR', 'HALLMARK_G2M_CHECKPOINT': 'http://www.gsea-msigdb.org/gsea/msigdb/cards/HALLMARK_G2M_CHECKPOINT', 'HALLMARK_APOPTOSIS': 'http://www.gsea-msi…
+	                                df = gene_stable_id chr  start  stop  ...  tes         biotype  name parent_row
+	                                     1              B   1      1    14  ...   14  protein_coding  genB          1
+	                                     2              C  12      3    12  ...   12         lincRNA  genC          2
+
+	                                     [2 rows x 10 columns]
+	                             drawn = {'B', 'C'}
+	                             genes = Genes(C_vs_D(B)_FDR<=0.05_logFC<=1)
+	                         genes_str = B, C
+	                           geneset = {'B', 'C'}
+	                     get_gene_name = <function ORAHyper.run.<locals>.__run.<locals>.get_gene_name at 0x7f459d3c5040>
+	          no_of_black_balls_in_urn = 0
+	                      no_of_trials = 2
+	           no_of_white_balls_drawn = 2
+	          no_of_white_balls_in_urn = 2
+	                           outfile = results/Genes/C_vs_D(B)_FDR<=0.05_logFC<=1/ORA/C_vs_D(B)_FDR<=0.05_logFC<=1_ORA(h).tsv
+	                           p_value = 1.0
+	                      possiblyseen = {'B', 'C'}
+	                         query_set = {'B', 'C'}
+	query_size_including_non_annotated = 2
+	                            result = {'Group': ['h.all.v7.1'], 'Set': ['HALLMARK_TNFA_SIGNALING_VIA_NFKB'], 'Set size': [2], 'Background size': [2], 'Observed overlap': [2], 'Query size': [2], 'Query size including non-annotated': [2], 'p-value': [1.0], 'Description': ['http://www.gsea-msigdb.org/gsea/msigdb/cards/HALLMARK_TNFA_SIGNALING_VIA_NFKB'], 'Genes': ['B, C'], 'GeneNames': []}
+	                              self = <mpathways.ora.ORAHyper object at 0x7f456ab88730>
+	                          set_name = HALLMARK_TNFA_SIGNALING_VIA_NFKB
+	                      sets_to_test = {'HALLMARK_TNFA_SIGNALING_VIA_NFKB': {'B', 'C'}, 'HALLMARK_HYPOXIA': {'B', 'C'}, 'HALLMARK_CHOLESTEROL_HOMEOSTASIS': {'B', 'C'}, 'HALLMARK_MITOTIC_SPINDLE': {'B', 'C'}, 'HALLMARK_WNT_BETA_CATENIN_SIGNALING': {'B', 'C'}, 'HALLMARK_TGF_BETA_SIGNALING': {'B', 'C'}, 'HALLMARK_IL6_JAK_STAT3_SIGNALING': {'B', 'C'}, 'HALLMARK_DNA_REPAIR': {'B', 'C'}, 'HALLMARK_G2M_CHECKPOINT': {'B', 'C'}, 'HALLMARK_APOPTOSIS': {'B', 'C'}, 'HALLMARK_NOTCH_SIGNALING': {'B', 'C'}, 'HALLMARK_ADIPOGENESIS': {'B', 'C'}, 'HALLMARK_ESTROGEN_RESPONSE_EARLY': {'B', 'C'}, 'HALLMARK_ESTROGEN_RESPONSE_LATE': {'B', 'C'}, 'HALLMARK_ANDROGEN_RESPONSE': {'B', 'C'}, 'HALLMARK_MYOGENESIS': {'B', 'C'}, 'HALLMARK_PROTEIN_SECRETION': {'B', 'C'}, 'HALLMARK_INTERFERON_ALPHA_RESPONSE': {'B', 'C'}, 'HALLMARK_INTERFERON_GAMMA_RESPONSE': {'B', 'C'}, 'HALLMARK_APICAL_JUNCTION': {'B', 'C'}, 'HALLMARK_APICAL_SURFACE': {'B', 'C'}, 'HALLMARK_HEDGEHOG_SIGNALING': {'B', 'C'}, 'HALLMARK_COMPLEMENT': {'B', 'C'}, 'HALLMARK_UNFOLDED_PROTEIN_RESPON…
+	                  total_gene_count = 2
+
+/anysnake2/venv/linked_in/mpathways/src/mpathways/ora.py":180, in <listcomp>
+	  177                 genes_str = ", ".join(list(sorted(drawn)))
+	  178                 result["Genes"].append(genes_str)
+	> 179                 gene_names = [get_gene_name(x) for x in list(sorted(drawn))]
+	  180                 gene_names = ", ".join(gene_names)
+	  181                 result["GeneNames"].append(gene_names)
+	  182             df = pd.DataFrame(result)
+Locals:
+	           .0 = <list_iterator object at 0x7f4568221be0>
+	get_gene_name = <function ORAHyper.run.<locals>.__run.<locals>.get_gene_name at 0x7f459d3c5040>
+	            x = B
+
+/anysnake2/venv/linked_in/mpathways/src/mpathways/ora.py":128, in get_gene_name
+	  125             def get_gene_name(x):
+	  126                 try:
+	> 127                     return genes.genome.genes[x].name
+	  128                 except IndexError:
+	  129                     return "<no name>"
+	  130 
+Locals:
+	genes = Genes(C_vs_D(B)_FDR<=0.05_logFC<=1)
+	    x = B
+
+/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/core/frame.py":3804, in __getitem__
+	  3801             if self.columns.nlevels > 1:
+	  3802                 return self._getitem_multilevel(key)
+	> 3803             indexer = self.columns.get_loc(key)
+	  3804             if is_integer(indexer):
+	  3805                 indexer = [indexer]
+	  3806         else:
+Locals:
+	      indexer = None
+	        is_mi = False
+	is_single_key = True
+	          key = B
+	         self = chr  tss  tes  strand         biotype  name
+	                gene_stable_id                                                      
+	                A                          1    1   14       1  protein_coding  genA
+	                B                          1    1   14       1  protein_coding  genB
+	                C                         12    3   12       1         lincRNA  genC
+	                D                          2    3   12       1          notype  genD
+	                E               noncanonical    1   14      14  protein_coding  genE
+	                F                          1    1   13       1  protein_coding      
+
+/nix/store/kdqxl951y2wmlzb20pwv1hd4iziiz4wj-python3-3.9.12-env/lib/python3.9/site-packages/pandas/core/indexes/base.py":3805, in get_loc
+	  3802                 return self._engine.get_loc(casted_key)
+	  3803             except KeyError as err:
+	> 3804                 raise KeyError(key) from err
+	  3805             except TypeError:
+	  3806                 # If we have a listlike key, _check_indexing_error will raise
+	  3807                 #  InvalidIndexError. Otherwise we fall through and re-raise
+Locals:
+	casted_key = B
+	       key = B
+	    method = None
+	      self = Index(['chr', 'tss', 'tes', 'strand', 'biotype', 'name'], dtype='object')
+	 tolerance = None
+
+Exception (repeated from above): KeyError 'B'
+
+job stdout:
+len query set before 2
+len query set after 2
+
+
+job stderr:

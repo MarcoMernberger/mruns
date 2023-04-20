@@ -207,17 +207,12 @@ def fill_incoming(run_ids: List[str], main_incoming: Path, incoming: Path):
                 sentinel.write(f"{filename.name}\n")
 
     ids_to_fetch = []
-    import os
-
     for run_id in run_ids:
         target_path = incoming / run_id
         target_path.mkdir(exist_ok=True, parents=True)
         if dir_is_empty(target_path):
             ids_to_fetch.append(run_id)
-
     for run_id in ids_to_fetch:
-        print(main_incoming)
-        print(run_id)
         target_path = incoming / run_id
         sentinel_file = target_path / "info.txt"
         run_folder = locate_folder(run_id, main_incoming)

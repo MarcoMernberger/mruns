@@ -1,0 +1,7 @@
+gene_stable_id	name	chr	start	stop	strand	tss	tes	biotype
+A	genA	1	1	14	1	1	14	protein_coding
+B	genB	1	1	14	1	1	14	protein_coding
+C	genC	12	3	12	1	3	12	lincRNA
+D	genD	2	3	12	1	3	12	notype
+E	genE	noncanonical	1	14	14	1	14	protein_coding
+F		1	1	13	1	1	13	protein_coding

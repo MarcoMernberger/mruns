@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
+4
 """defaults.py: Contains standard plots and analyses."""
 
 from pathlib import Path
@@ -16,10 +16,120 @@ from mpathways import GSEA, GMTCollection, MSigChipEnsembl, MSigDBCollection, OR
 from mplots import volcano
 from .base import Analysis
 from .util import assert_uniqueness
+from .modules import VolcanoModule, PCAModule
+
 
 __author__ = "Marco Mernberger"
 __copyright__ = "Copyright (c) 2020 Marco Mernberger"
 __license__ = "mit"
+
+
+class RunDef:
+    def __init__(self, runner):
+        self.runner = runner
+
+    def get_annos_deps_from_differential(
+        self, comparison_name: str
+    ) -> Tuple[List[Annotator], List[Job]]:
+        differential = self.runner.differential[comparison_name]
+        annotators = self.runner.differential_annotators[comparison_name]
+        dependencies = differential.dependencies
+        return annotators, dependencies
+
+    def create_volcano_module(self, comparison_name: str, **parameters) -> VolcanoModule:
+        differential = self.runner.differential[comparison_name]
+        module_parameters = {
+            "comparison_name": comparison_name,
+            "fc_threshold": parameters.pop("fc_threshold", 1),
+            "alpha": parameters.pop("alpha", 0.05),
+            "logFC": differential.transformer.logFC,
+            "p": differential.transformer.P,
+            "fdr": differential.transformer.FDR,
+        }
+        module_parameters.update(parameters)
+        columns = differential.input_columns
+        outfile = Path(f"{comparison_name}.volcano.png")
+        inputs = {"df": [columns]}
+        return VolcanoModule(outfile, inputs, **module_parameters)
+
+    def register_volcano(
+        self, tag: str, comparison_names: Optional[List[str]] = None, **parameters
+    ) -> None:
+        if comparison_names is None:
+            comparison_names = list(self.runner.differential.keys())
+        for comparison_name in comparison_names:
+            module = self.create_volcano_module(comparison_name)
+            annotators, dependencies = self.get_annos_deps_from_differential(comparison_name)
+            self.runner.genes.register_default_module_for_tag(
+                tag,
+                module,
+                annotators=annotators,
+                dependencies=dependencies,
+            )
+
+    def column_rename_function(self, rename_columns: Optional[Dict[str, str]]) -> Callable:
+        def __prepare_input_frame(self, df: DataFrame) -> DataFrame:
+            return df.rename(columns=rename_columns)
+
+        return __prepare_input_frame
+
+    def __get_counters(self, counter: Optional[Union[str, List[str]]] = None) -> List[str]:
+        if counter is None:
+            counters = list(self.runner.norm.keys())  # if no name specified, use all
+        elif isinstance(counter, list):
+            counters = counter
+        elif isinstance(counter, str):
+            counters = [counter]
+        return counters
+
+    def __get_samples_for_pca(
+        self, comparisons: Optional[Union[bool, str, List[str]]] = False
+    ) -> Dict[str, List[str]]:
+        samples_to_plot = {"all": list(self.runner.raw_samples.keys())}
+        if comparisons:
+            if isinstance(comparisons, list):
+                comparison_names = comparisons
+            elif isinstance(comparisons, str):
+                comparison_names = [comparisons]
+            else:
+                comparison_names = self.runner.differential.keys()
+            for comparison_name in comparison_names:
+                differential = self.runner.differential[comparison_name]
+                samples = differential.samples
+                samples_to_plot[comparison_name] = samples
+        return samples_to_plot
+
+    def create_pca_module(self, prefix: str, samples: List[str], counter_name: str) -> PCAModule:
+        columns = [self.runner.columns_lookup[counter_name][sample] for sample in samples]
+        rename = dict(zip(columns, samples))
+        inputs = {
+            "df": columns,
+            "df_samples": self.runner.samples,
+        }
+        outfile = Path(f"{prefix}.{counter_name}.pca.png")
+        module = PCAModule(outfile, inputs)
+        module.prepare_input_frame = self.column_rename_function(rename_columns=rename)
+        return module
+
+    def register_pca(
+        self,
+        tag: str,
+        counter: Optional[Union[str, List[str]]],
+        comparisons: Optional[Union[bool, str, List[str]]] = False,
+    ) -> None:
+        """PCA can be done for any Normgroup ... register PCA for all columns and for differential columns"""
+        counters = self.__get_counters(counter)
+        samples_to_plot = self.__get_samples_for_pca(comparisons)
+        for counter_name in counters:
+            annotators = [annotator for annotator in self.runner.norm[counter_name]]
+            for prefix in samples_to_plot:
+                module = self.create_pca_module(prefix, samples_to_plot[prefix], counter_name)
+                self.runner.genes.register_default_module_for_tag(
+                    tag,
+                    module,
+                    annotators=annotators,
+                    dependencies=[],
+                )
 
 
 class Defaults:
@@ -235,15 +345,25 @@ class Defaults:
                     items.append(pl)
         return items
 
+
+class ORA:
+    def __init__(self, genes_used, genes_to_analyze, analysis):
+        self.genes_used = genes_used
+        self.analysis = analysis
+        self.genes_to_analyze = genes_to_analyze
+        self.__prepare_ora()
+
     def __prepare_ora(self):
         hes = []
-        for pathway_method in self.analysis.pathway_analysis:
+        for pathway_method in self.analysis.pathways:
             if pathway_method == "ora":
                 collections = ["h"]
-                if "collections" in self.analysis.pathway_analysis[pathway_method]:
-                    collections = self.analysis.pathway_analysis[pathway_method]["collections"]
+                if "collections" in self.analysis.pathways[pathway_method]:
+                    collections = self.analysis.pathways[pathway_method]["collections"]
                 # run ora
                 for collection in collections:
+                    print(self.genes_used.genome)
+                    print(self.genes_used)
                     he = ORAHyper(
                         name=f"ORA({collection})",
                         genome=self.genes_used.genome,
@@ -268,15 +388,16 @@ class Defaults:
     def run_ora(self) -> List[Item]:
         # downstream analyses
         items = []
-        for genes_name in self.genes_to_analyze:
-            genes = self.genes_to_analyze[genes_name]
+        for genes_wrapper in self.genes_to_analyze:
+            genes = genes_wrapper.genes
+            print("genes", genes)
             for he in self.get_oras():
                 job = he.run(genes)
-                plotjobs = he.plot_bars(job).plot
-                pl = PlotItem(
-                    self.genes_parameters[genes.name]["section"],
-                    plotjobs,
-                    f"#### Over-Representation Analysis using hypergeometric test on DE genes from {genes.name} with collection {he.collection.name}",
-                )
-                items.append(pl)
+                # plotjobs = he.plot_bars(job).plot
+                # pl = PlotItem(
+                #     self.genes_parameters[genes.name]["section"],
+                #     plotjobs,
+                #     f"#### Over-Representation Analysis using hypergeometric test on DE genes from {genes.name} with collection {he.collection.name}",
+                # )
+                # items.append(pl)
         return items

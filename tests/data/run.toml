@@ -6,9 +6,9 @@ incoming = "tests/data"
 main_incoming = "tests/data/incoming"
 
 [samples]
-df_samples = "samples.tsv"
+file = "samples.tsv"
 reverse_reads = false
-kit = "QuantSeq"           #fastq_processor="UMIExtractAndTrim"
+kit = "QuantSeq"      #fastq_processor="UMIExtractAndTrim"
 stranded = true
 
 [alignment]
@@ -17,8 +17,12 @@ revision = 98
 aligner = "STAR"
 parameters = [["some", "parameter"]]
 
+[normalization]
+TPM = "NormalizationTPM"
+CPM = "NormalizationCPM"
+
 [genes.filter]
-canonical = true
+chr = "canonical"
 biotypes = [
     "protein_coding",
     "snRNA",
@@ -38,7 +42,8 @@ biotypes = [
     "bidirectional_promoter_lncRNA",
     "lincRNA",
 ]
-cpm_threshold = 1
+thresholds = [["CPM", "1>", 1]]
+
 
 [comparison]
 
@@ -59,36 +64,36 @@ filter_expressions = [
         [
             "FDR",
             "<=",
-            "0.05",
+            0.05,
         ],
         [
             "log2FC",
             "|>",
-            "1",
+            1,
         ],
     ],
     [
         [
             "FDR",
             "<=",
-            "0.05",
+            0.05,
         ],
         [
             "log2FC",
             ">=",
-            "1",
+            1,
         ],
     ],
     [
         [
             "FDR",
             "<=",
-            "0.05",
+            0.05,
         ],
         [
             "log2FC",
             "<=",
-            "1",
+            1,
         ],
     ],
 ]
@@ -192,12 +197,12 @@ parameters = {}
 # put combinations of gene lists/comparisons here
 file = "combinations.tsv"
 
-[pathway_analysis]
+[pathways]
 
-[pathway_analysis.ora]
+[pathways.ora]
 collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
 
-[pathway_analysis.gsea]
+[pathways.gsea]
 collections = ["c6", "c7", "c2", "c5", "h", "ipa"]
 
 [reports]
