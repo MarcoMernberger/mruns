@@ -1,1 +1,0 @@
-fastqc -t 1 --noextract --quiet -o results/lanes/sample/FASTQC cache/lanes/sample/input_R1_.fastq cache/lanes/sample/input_R2_.fastq

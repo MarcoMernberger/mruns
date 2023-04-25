@@ -48,3 +48,7 @@ MANIFEST
 
 # Per-project virtualenvs
 .venv*/
+
+# pytest results
+tests/run
+.ppg

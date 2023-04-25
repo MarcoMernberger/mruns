@@ -36,5 +36,7 @@ class InputHandler:
             return self.read(Path(source))
         elif callable(source):
             return source
+        elif isinstance(source, DataFrame):
+            return lambda : source
         else:
             raise NotImplementedError(f"Don't know how to read from type {type(source)}.")

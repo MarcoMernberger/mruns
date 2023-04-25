@@ -3,7 +3,6 @@
 
 """mbf_compliance.py: Contains methods needed to work woth the Pypipgraph."""
 
-import pandas as pd
 import pypipegraph2 as ppg2
 from pandas import DataFrame
 from pathlib import Path
@@ -11,6 +10,7 @@ from typing import Optional, Callable, List, Dict, Tuple, Any, Union
 from pypipegraph2 import Job
 from mbf.genomics.annotator import Annotator
 from mdataframe import _Transformer
+from copy import deepcopy
 from mbf.genomics.genes import Genes
 from collections import UserDict
 from .modules import Module, VolcanoModule, PCAModule
@@ -54,15 +54,16 @@ class GenesWrapper:
         self.path = Path(outpath)
         self.__modules: Dict[str, Module] = {}
         self.__dependencies: Dict[str, List[Job]] = {}
-        self.__tags = tags
-        self.__tags.append(self.genes_name)
+        self.__tags = set(tags)
+        self.__tags.add(self.genes_name)
+        self.__tags.add("all")
 
     @property
     def tags(self):
         return self.__tags
 
     def add_tag(self, tag: str):
-        self.__tags.append(tag)
+        self.__tags.add(tag)
 
     @property
     def modules(self):
@@ -101,12 +102,16 @@ class GenesWrapper:
         output_filename = self.path / f"{self.genes.name}.tsv"
         self.genes.write(output_filename, mangler_function)
 
-    def get_df_caller_func(self, columns: Optional[List[str]] = None) -> Callable:
-        def get_ddf():
+    def get_df_caller_func(
+        self, columns: Optional[List[str]] = None, rename_columns: Optional[Dict[str, str]] = None
+    ) -> Callable:
+        def get_ddf(*args):
             df = self.genes.df
             df = df.set_index("name")
             if columns is not None:
                 df = df[columns]
+            if rename_columns is not None:
+                df = df.rename(columns=rename_columns)
             return df
 
         return get_ddf
@@ -118,7 +123,7 @@ class GenesWrapper:
         module_kwargs: Dict[str, Any],
         annotators: List[Annotator] = [],
         dependencies: List[Job] = [],
-        rename_columns: Optional[Dict[str, str]] = None
+        rename_columns: Optional[Dict[str, str]] = None,
     ):
         module = module_template(*module_args, **module_kwargs)
         module = self.adapt_module(module, rename_columns)
@@ -137,12 +142,17 @@ class GenesWrapper:
         self.__modules[module.name] = module
         self.__dependencies[module.name] = dependencies
 
-    def adapt_module(self, module: Module, rename_columns: Optional[Dict[str, str]] = None) -> Module:
+    def adapt_module(
+        self, module: Module, rename_columns: Optional[Dict[str, str]] = None
+    ) -> Module:
         # set outputs
         module.outputs = self.fix_outputs(module.outputs)
+        # set name
+        module.name = f"{module.outputs[0].stem}"
+        print(module.outputs)
         # set inputs
-        module.sources = self.fix_inputs(module.sources)
-        module.name = module.outputs[0].stem
+        module.old_inputs = module.sources.copy()
+        module.sources = self.fix_inputs(module.sources, rename_columns)
         if rename_columns is not None:
             module.prepare_input_frame = self.column_rename_function(rename_columns=rename_columns)
         return module
@@ -155,15 +165,17 @@ class GenesWrapper:
         fixed_path = self.path / filename.parent / f"{self.genes.name}.{filename.name}"
         return fixed_path
 
-    def fix_inputs(self, sources: Dict[str, Any]) -> Dict[str, Union[Callable, Any, str, Path]]:
+    def fix_inputs(
+        self, sources: Dict[str, Any], rename_columns: Optional[Dict[str, str]] = None
+    ) -> Dict[str, Union[Callable, Any, str, Path]]:
         if "df" in sources:
-            sources["df"] = self.get_df_caller_func(sources["df"])
+            sources["df"] = self.get_df_caller_func(sources["df"], rename_columns)
         else:
-            sources["df"] = self.get_df_caller_func(None)
+            sources["df"] = self.get_df_caller_func(None, rename_columns)
         return sources
 
     def column_rename_function(self, rename_columns: Optional[Dict[str, str]]) -> Callable:
-        def __prepare_input_frame(self, df: DataFrame) -> DataFrame:
+        def __prepare_input_frame(df: DataFrame) -> DataFrame:
             return df.rename(columns=rename_columns)
 
         return __prepare_input_frame
@@ -217,7 +229,8 @@ class GenesCollection(UserDict):
             )
 
     def register_default_module_for_tag(
-        self, tag: str,
+        self,
+        tag: str,
         module_template: type[Module],
         module_args: List[Any],
         module_kwargs: Dict[str, Any],
@@ -228,11 +241,11 @@ class GenesCollection(UserDict):
         for genes_wrapper in self.genes_by_tag(tag):
             genes_wrapper.register_default_module(
                 module_template,
-                module_args,
-                module_kwargs,
+                deepcopy(module_args),
+                deepcopy(module_kwargs),
                 annotators=annotators,
                 dependencies=dependencies,
-                rename_columns=rename_columns
+                rename_columns=rename_columns,
             )
 
 
@@ -274,11 +287,14 @@ class FromTransformerWrapper(Annotator):
         ]
         return deps
 
+    def dep_annos(self):
+        return self.annotators
+
     def __freeze__(self):
         return "FromTransformerWrapper(%s)" % self.columns[0]
 
 
-class DifferentialWrapper(object):
+class DifferentialWrapper(Annotator):
     def __init__(
         self,
         name: str,
@@ -288,6 +304,7 @@ class DifferentialWrapper(object):
         samples: List[str],
         input_columns: List[str],
         dependencies: List[Job],
+        annotators: List[Annotator],
     ):
         """
         A convenience wrapper class to store the input columns, annotator group,
@@ -317,8 +334,13 @@ class DifferentialWrapper(object):
         self.counter = counter
         self.samples = samples
         self.input_columns = input_columns
-        self.dependencies = dependencies
+        self.__dependencies = dependencies
         self.columns = self.transformer.columns
+        self.annotators = annotators
+
+    @property
+    def dependencies(self):
+        return self.__dependencies
 
     def __freeze__(self):
         return self.transformer.__freeze__()
@@ -326,11 +348,30 @@ class DifferentialWrapper(object):
     def __call__(self, *args):
         self.transformer.__call__(*args)
 
-    def deps(self) -> List[Job]:
-        return self.dependencies
-
     def __getattr__(self, name):
         if hasattr(self.transformer, name):
             return object.__getattribute__(self.transformer, name)
         else:
             return object.__getattribute__(self, name)
+
+    def calc_ddf(self, ddf):
+        """Calculates the ddf to append."""
+        df_copy = ddf.df.copy()
+        df_copy = df_copy.set_index("gene_stable_id")
+        df_in = df_copy[self.input_columns]
+        df_transformed = self.transformer(df_in)
+        df_transformed = df_transformed.reset_index()
+        df_transformed = df_transformed[self.columns]
+        return df_transformed
+
+    def deps(self, ddf) -> List[Job]:
+        """Return ppg.jobs"""
+        deps = self.dependencies + [
+            ppg2.ParameterInvariant(
+                f"{self.transformer.name}_{self.transformer.hash}", self.transformer.hash
+            )
+        ]
+        return deps
+
+    def dep_annos(self) -> List[Annotator]:
+        return self.annotators

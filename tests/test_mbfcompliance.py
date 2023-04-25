@@ -34,7 +34,7 @@ class MockModule(Module):
     def __init__(self, name, inputs):
         super().__init__(name, inputs)
         self.name = name
-        self._outputs = [Path(f"file_for_{name}")]
+        self._outputs = [Path(f"file_for_{name}.png")]
 
     def check_inputs(self):
         pass
@@ -95,7 +95,7 @@ class Test_GenesWrapper:
         assert hasattr(gw, "modules")
         assert hasattr(gw, "dependencies")
         assert gw2.name == "GW_genes_filtered"
-        assert gw2.tags == ["filtered", "some_other", gw2.genes_name]
+        assert gw2.tags == set(["all", "filtered", "some_other", gw2.genes_name])
 
     def test_geneswrapper_add_tag(self, gw):
         gw.add_tag("another tag")
@@ -103,7 +103,6 @@ class Test_GenesWrapper:
 
     @pytest.mark.usefixtures("new_pipegraph_no_qc")
     def test_geneswrapper_genes_df(self, gw):
-        print(type(gw.genes_df()))
         assert isinstance(gw.genes_df(), DataFrame)
 
     @pytest.mark.usefixtures("new_pipegraph_no_qc")
@@ -129,24 +128,45 @@ class Test_GenesWrapper:
 
     @pytest.mark.usefixtures("new_pipegraph_no_qc")
     def test_geneswrapper_register_default_module(self, gw, module):
-        module.sources = {"df": ["chr"]}
+        module_args = ["MockModule", {"df": ["chr"]}]
+        module_kwargs = {}
         with mock.patch.object(
             mbf.genomics.genes.Genes, "add_annotator", new=lambda self, anno: anno
         ):
-            gw.register_default_module(module, annotators=["mock"], dependencies=["job"])
-        fixed_module = gw.modules["MockModule"]
+            gw.register_default_module(
+                MockModule, module_args, module_kwargs, annotators=["mock"], dependencies=["job"]
+            )
+        module_name = f"{gw.genes_name}.file_for_MockModule"
+        print("module", gw.modules)
+        fixed_module = gw.modules[module_name]
         assert fixed_module.outputs[0].parent == gw.path
-        assert fixed_module.outputs[0].name == f"{gw.genes_name}.file_for_MockModule"
+        assert fixed_module.outputs[0].name == f"{module_name}.png"
         assert callable(fixed_module.sources["df"])
         df = fixed_module.sources["df"]()
         assert df.columns == ["chr"]
-        assert len(gw.dependencies["MockModule"]) == 2
-        module.sources = {"df": None}
-        gw.register_default_module(module, dependencies=[])
-        fixed_module = gw.modules["MockModule"]
+        assert len(gw.dependencies[module_name]) == 2
+        # test the default option
+        module_args = ["MockModule", {"df": None}]
+        gw.register_default_module(MockModule, module_args, module_kwargs, dependencies=[])
+        fixed_module = gw.modules[module_name]
         assert callable(fixed_module.sources["df"])
         df = fixed_module.sources["df"]()
         assert "tss" in df.columns
+        module_args = ["MockModule", {"df": None}]
+        # test the rename option
+        gw.register_default_module(
+            MockModule,
+            module_args,
+            module_kwargs,
+            dependencies=[],
+            rename_columns={"tss": "remaned tss"},
+        )
+        fixed_module = gw.modules[module_name]
+        assert callable(fixed_module.sources["df"])
+        print("3", type(fixed_module.sources["df"]))
+        df = fixed_module.sources["df"]()
+        assert "tss" not in df.columns
+        assert "remaned tss" in df.columns
 
     @pytest.mark.usefixtures("new_pipegraph_no_qc")
     def test_geneswrapper_register_module(self, gw, module):

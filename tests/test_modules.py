@@ -54,25 +54,25 @@ def call_value():
 class Test_Module:
     @pytest.fixture
     def inputs(self):
-        mockinput = MockModule("InputMock", {}, lambda: 3)
         return {
             "path": data_folder / "combinations.tsv",
             "str": str(data_folder / "combinations.tsv"),
             "callable": call_value,
-            "module": mockinput,
+            "module": MockModule("InputMock", {}, lambda: 3),
         }
 
     def test_module_init(self, inputs):
         testmodule = MockModule("BaseModule", inputs, parameter=1, some_other_parameter=2)
+        assert hasattr(testmodule, "caller")
+        assert hasattr(testmodule, "outputs")
         assert hasattr(testmodule, "parameters")
         assert testmodule.parameters["parameter"] == 1
         assert testmodule.parameters["some_other_parameter"] == 2
         assert hasattr(testmodule, "inputs")
-        assert hasattr(testmodule, "outputs")
-        assert testmodule._outputs == ["file_for_BaseModule"]
+        assert "file_for_BaseModule" in testmodule.outputs
         for input_name in testmodule.inputs:
             assert input_name in inputs
-            assert callable(testmodule._inputs[input_name])
+            assert callable(InputHandler.get_load_callable(testmodule.sources[input_name]))
 
     def test_load_input(self, inputs):
         testmodule = MockModule("BaseModule", inputs, parameter=1, some_other_parameter=2)
@@ -87,10 +87,12 @@ class Test_Module:
         inputs["not_readable"] = "somepath.clc"
         with pytest.raises(NotImplementedError) as info:
             testmodule = MockModule("BaseModule", inputs, parameter=1, some_other_parameter=2)
+            testmodule.load_input("not_readable")
             assert "Need a method to load file type .clc" in str(info)
         inputs["notworking"] = 0.1
         with pytest.raises(NotImplementedError) as info:
             testmodule = MockModule("BaseModule", inputs, parameter=1, some_other_parameter=2)
+            testmodule.load_input("not_readable")
             assert "Don't know how to read from type" in str(info)
 
 
@@ -144,7 +146,7 @@ class Test_VolcanoModule:
 
     def test_outputs(self, module, tmp_path):
         module.run()
-        for outfile in module._outputs:
+        for outfile in module.outputs:
             assert outfile.exists()
 
     def test_check_input(self, frame, tmp_path):
@@ -220,12 +222,12 @@ class Test_PCAModule:
     def test_outputs(self, data, tmp_path, module):
         outfile = tmp_path / "pca.png"
         module.run()
-        for outfile in module._outputs:
+        for outfile in module.outputs:
             assert outfile.exists()
 
     def test_check_input(self, module, data, tmp_path):
         data.iloc[(0, 0)] = "wrong"
-        module._inputs["df"] = lambda: data
+        module.sources = {"df": lambda: data}
         with pytest.raises(ValueError) as info:
             module.load()
             assert "PCA Dataframe contains non-float types." in str(info)

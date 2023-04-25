@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from mplots import volcano_plot, volcano_calc
 from .inputs import InputHandler
 from mplots.scatter import generate_dr_plot
+from mplots import plot_empty
 from mdataframe.projection import PCA
 
 
@@ -61,7 +62,8 @@ class Module(ABC):
 
     def get_input(self, input_name: str) -> Any:
         input_callable = InputHandler.get_load_callable(self._inputs[input_name])
-        return input_callable()
+        value = input_callable()
+        return value
 
     def load_input(self, input_name: str):
         value = self.get_input(input_name)
@@ -84,7 +86,7 @@ class Module(ABC):
 
     def run(self):
         results = self()
-        if not isinstance(results, tuple):
+        if not (isinstance(results, tuple) or isinstance(results, list)):
             results = [results]
         self.create_outputs(*results)
 
@@ -104,6 +106,8 @@ class Module(ABC):
 class VolcanoModule(Module):
 
     required_inputs = ["df"]
+    default_threshold = 1
+    default_alpha = 0.05
 
     def __init__(
         self,
@@ -126,8 +130,8 @@ class VolcanoModule(Module):
 
     def set_default_parameters_parameters(self):
         default_parameters = {
-            "fc_threshold": self.parameters.pop("fc_threshold", 1),
-            "alpha": self.parameters.pop("alpha", 0.05),
+            "fc_threshold": self.parameters.pop("fc_threshold", self.default_threshold),
+            "alpha": self.parameters.pop("alpha", self.default_alpha),
             "logFC": self.parameters.pop("logFC", "logFC"),
             "p": self.parameters.pop("p", "p"),
             "fdr": self.parameters.pop("fdr", "fdr"),
@@ -193,6 +197,8 @@ class PCAModule(Module):
         return df
 
     def call(self):
+        if len(self.df) == 0:
+            return plot_empty(), pd.DataFrame()
         n_components = self.parameters["n_components"]
         title = self.parameters.pop("title", "PCA (n_components={n_components})")
         show_names = self.parameters.pop("show_names", True)
@@ -206,7 +212,7 @@ class PCAModule(Module):
         f = generate_dr_plot(
             df_pca, class_label_column=class_label_column, title=title, show_names=show_names
         )
-        return [f, df_pca]
+        return f, df_pca
 
     def create_outputs(self, f, df_plot):
         folder = self.outputs[0].parent

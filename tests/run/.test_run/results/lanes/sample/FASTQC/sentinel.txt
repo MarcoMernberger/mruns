@@ -1,2 +1,0 @@
-run time: 3.31 seconds
-return code: 0

@@ -393,6 +393,7 @@ class ORA:
             print("genes", genes)
             for he in self.get_oras():
                 job = he.run(genes)
+                print(job)
                 # plotjobs = he.plot_bars(job).plot
                 # pl = PlotItem(
                 #     self.genes_parameters[genes.name]["section"],

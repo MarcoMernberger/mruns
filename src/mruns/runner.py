@@ -23,7 +23,7 @@ from collections import OrderedDict
 from mbf.align import Sample
 from mpathways import GSEA
 from pathlib import Path
-from typing import Optional, Callable, List, Dict, Tuple, Any, Union
+from typing import Optional, Callable, List, Dict, Tuple, Any, Union, Set
 from pandas import DataFrame, Series
 from mbf import align
 from mbf.genomics.genes.anno_tag_counts import _NormalizationAnno, _FastTagCounter
@@ -32,7 +32,7 @@ from mbf.genomics.annotator import Annotator
 from .base import Analysis
 from mdataframe import Filter, _Transformer
 from .mbf_compliance import (
-    FromTransformerWrapper,
+    # FromTransformerWrapper,
     DifferentialWrapper,
     GenesCollection,
     GenesWrapper,
@@ -106,7 +106,7 @@ class Runner:
         self.gsea = GSEA()
 
     def _get_genome(self):
-        # ppg.new()
+        ppg.new()
         if self.analysis.alignment["species"] == "Mus_musculus":
             genome = mbf.genomes.Mus_musculus(self.analysis.alignment["revision"])
         elif self.analysis.alignment["species"] == "Homo_sapiens":
@@ -115,7 +115,7 @@ class Runner:
             genome = mbf.genomes.EnsemblGenome(
                 self.analysis.alignment["species"], self.analysis.alignment["revision"]
             )
-        # ppg.run()
+        ppg.run()
         return genome
 
     @property
@@ -181,14 +181,9 @@ class Runner:
         "Collection of all wrapped genes object"
         return self._genes_collection
 
-    def load_comparison_frames(self):
-        comparison_dataframes = {}
-        for comparison in self.analysis.comparison:
-            infile = self.analysis.filepath_from_incoming(
-                self.analysis.comparison[comparison]["file"]
-            )
-            comparison_dataframes[comparison] = pd.read_csv(infile, sep="\t")
-        return comparison_dataframes
+    @property
+    def combinations(self):
+        return self._combinations
 
     @property
     def comparison_frames(self):
@@ -197,6 +192,15 @@ class Runner:
 
     def _set_comparison_frames(self):
         self._comparison_frames = self.load_comparison_frames()
+
+    def load_comparison_frames(self):
+        comparison_dataframes = {}
+        for comparison in self.analysis.comparison:
+            infile = self.analysis.filepath_from_incoming(
+                self.analysis.comparison[comparison]["file"]
+            )
+            comparison_dataframes[comparison] = pd.read_csv(infile, sep="\t")
+        return comparison_dataframes
 
     def get_fastq_processor_from_analysis(self):
         """
@@ -415,10 +419,6 @@ class Runner:
             for sample_name in self.norm[norm_key]:
                 self.genes_all.add_annotator(self.norm[norm_key][sample_name])
 
-    def write_genes(self, genes_name="genes_all", output_filename=None, mangler_function=None):
-        genes = self.genes[genes_name].genes
-        genes.write(output_filename, mangler_function)
-
     def _interpret_threshold_filter(self, filter_arg) -> Union[str, List[str]]:
         columns, operator, value = filter_arg
         if isinstance(columns, list):
@@ -569,10 +569,8 @@ class Runner:
             counter=counter,
             samples=samples_a + samples_b,
             input_columns=columns_a + columns_b,
-            dependencies=[
-                self.genes_used.add_annotator(count_annotator)
-                for count_annotator in self.counters[counter].values()
-            ],
+            dependencies=[],
+            annotators=list(self.counters[counter].values()),
         )
         return deg
 
@@ -594,10 +592,8 @@ class Runner:
             counter=counter,
             samples=samples,
             input_columns=list(self.columns_lookup[counter].values()),
-            dependencies=[
-                self.genes_used.add_annotator(count_annotator)
-                for count_annotator in self.counters[counter].values()
-            ],
+            dependencies=[],
+            annotators=list(self.counters[counter].values()),
         )
         return deg
 
@@ -630,43 +626,49 @@ class Runner:
     def deg(self):
         """use genes_used and perform all differential expression analysis. This includes statistics, volcano and heatmap plots."""
         self._set_differential_transformer()
-        self.differential_annotators = {}
+        # self.differential_annotators = {}
         for comparison_name in self.differential:
             differential = self.differential[comparison_name]
-            annotator = FromTransformerWrapper(differential)
-            self.genes_used.add_annotator(annotator)
-            self.differential_annotators[comparison_name] = annotator
+            # annotator = FromTransformerWrapper(differential)
+            self.genes_used.add_annotator(differential)
+            # self.differential_annotators[comparison_name] = annotator
 
     def __get_annos_deps_from_differential(
         self, comparison_name: str
     ) -> Tuple[List[Annotator], List[Job]]:
         differential = self.differential[comparison_name]
-        annotators = []#self.differential_annotators[comparison_name]]
+        # annotators = [self.differential[comparison_name]]
         dependencies = differential.dependencies
-        return annotators, dependencies
+        # return annotators, dependencies
+        return [differential], dependencies
 
-    def __create_volcano_module_arguments(self, comparison_name: str, **parameters) -> Tuple[List[Any], Dict[str, Any]]:
+    def __create_volcano_module_arguments(
+        self, comparison_name: str, **parameters
+    ) -> Tuple[List[Any], Dict[str, Any]]:
         differential = self.differential[comparison_name]
         module_parameters = {
-            "comparison_name": comparison_name,
-            "fc_threshold": parameters.pop("fc_threshold", 1),
-            "alpha": parameters.pop("alpha", 0.05),
+            "fc_threshold": parameters.pop("fc_threshold", VolcanoModule.default_threshold),
+            "alpha": parameters.pop("alpha", VolcanoModule.default_alpha),
             "logFC": differential.transformer.logFC,
             "p": differential.transformer.P,
             "fdr": differential.transformer.FDR,
         }
         module_parameters.update(parameters)
-        columns = differential.input_columns
+        columns = differential.columns
         outfile = Path(f"{comparison_name}.volcano.png")
-        inputs = {"df": [columns]}
+        inputs = {"df": columns}
         return [outfile, inputs], module_parameters
 
-    def get_counter_columns_to_sample(self, samples: List[str], counter_name: str) -> OrderedDict[str, str]:
+    def get_counter_columns_to_sample(
+        self, samples: List[str], counter_name: str
+    ) -> OrderedDict[str, str]:
         columns = [self.columns_lookup[counter_name][sample] for sample in samples]
         rename = OrderedDict(zip(columns, samples))
         return rename
 
-    def __create_pca_module_arguments(self, prefix: str, samples: List[str], counter_name: str) -> Tuple[List[Any], Dict[str, Any], Optional[Dict[str, str]]]:
+    def __create_pca_module_arguments(
+        self, prefix: str, samples: List[str], counter_name: str
+    ) -> Tuple[List[Any], Dict[str, Any], Optional[Dict[str, str]]]:
         """This is so ugly"""
         rename = self.get_counter_columns_to_sample(samples, counter_name)
         columns = list(rename.keys())
@@ -676,6 +678,13 @@ class Runner:
         }
         outfile = Path(f"{prefix}.{counter_name}.pca.png")
         return [outfile, inputs], {}, rename
+
+    def register_defaults(self) -> None:
+        """register default jobs with the genes"""
+        for comparison_name in self.differential:
+            self.register_volcano(comparison_name)
+        self.register_pca("filtered")
+        self.register_pca("combined")
 
     def register_volcano(
         self, tag: str, comparison_names: Optional[List[str]] = None, **parameters
@@ -697,17 +706,18 @@ class Runner:
     def register_pca(
         self,
         tag: str,
-        counter: Optional[Union[str, List[str]]],
+        counter: Optional[Union[str, List[str]]] = None,
         comparisons: Optional[Union[bool, str, List[str]]] = False,
     ) -> None:
         """PCA can be done for any Normgroup ... register PCA for all columns and for differential columns"""
         counters = self.__get_counters(counter)
         samples_to_plot = self.__get_samples_for_pca(comparisons)
-        print(samples_to_plot)
         for counter_name in counters:
             annotators = [annotator for annotator in self.norm[counter_name].values()]
             for prefix in samples_to_plot:
-                module_args, module_kwargs, rename_columns = self.__create_pca_module_arguments(prefix, samples_to_plot[prefix], counter_name)
+                module_args, module_kwargs, rename_columns = self.__create_pca_module_arguments(
+                    prefix, samples_to_plot[prefix], counter_name
+                )
                 self.genes.register_default_module_for_tag(
                     tag,
                     PCAModule,
@@ -715,7 +725,7 @@ class Runner:
                     module_kwargs,
                     annotators=annotators,
                     dependencies=[],
-                    rename_columns=rename_columns
+                    rename_columns=rename_columns,
                 )
 
     def __get_counters(self, counter: Optional[Union[str, List[str]]] = None) -> List[str]:
@@ -762,7 +772,7 @@ class Runner:
 
     def __filter_genes(self, new_name: str, comparison_name: str, filter_expr: List[str]):
         differential_filter = self.__get_differential_filter(comparison_name, filter_expr)
-        annotators = list(self.raw.values()) + [self.differential_annotators[comparison_name]]
+        annotators = list(self.raw.values()) + [self.differential[comparison_name]]
         for counter_name in self.norm:
             annotators.extend(list(self.norm[counter_name].values()))
         genes_filtered = self.genes_used.filter(
@@ -796,6 +806,15 @@ class Runner:
         combined_genes = self.generate_combinations()
         self._genes_collection.update(combined_genes)
 
+    def get_tags_from_parents(self, genes_wrapped_to_combine: List[GenesWrapper]) -> Set[str]:
+        inherited_tags = set()
+        for gw in genes_wrapped_to_combine:
+            new_tags = gw.tags.copy()
+            new_tags.discard(gw.genes.name)
+            new_tags.discard("filtered")
+            inherited_tags.update(new_tags)
+        return inherited_tags
+
     def generate_combinations(self):
         combined_genes = {}
         for _, row in self.combinations.iterrows():
@@ -806,10 +825,11 @@ class Runner:
             ]
             generator = self.analysis.get_generator(row["operation"])
             combined = generator(new_name, [g.genes for g in genes_wrapped_to_combine])
+            inherited_tags = self.get_tags_from_parents(genes_wrapped_to_combine)
             combined_wrapped = GenesWrapper(
                 combined,
                 outpath=self.combined_path() / new_name,
-                tags=["combined", new_name],
+                tags=["combined", new_name] + list(inherited_tags),
             )
             combined_genes[new_name] = combined_wrapped
         return combined_genes
@@ -820,26 +840,12 @@ class Runner:
     def differential_path(self):
         return self.analysis.outpath / "Genes" / self._genes_used.name / "differential"
 
-    def write_filtered(self, mangler_function=None):
-        self.write_genes_with_tag("filtered", mangler_function=mangler_function)
-
-    def write_combined(self, mangler_function=None):
-        self.write_genes_with_tag("combined")
-
-    def write_genes_with_tag(self, tag, mangler_function=None):
-        for gene_wrapper in self.genes.genes_by_tag(tag):
-            gene_wrapper.write(mangler_function)
-
     def _load_combinations(self):
         df_combinations = None
         if "file" in self.analysis.combination:
             infile = self.analysis.filepath_from_incoming(self.analysis.combination["file"])
             df_combinations = pd.read_csv(infile, sep="\t")
         return df_combinations
-
-    @property
-    def combinations(self):
-        return self._combinations
 
     def _set_combinations(self):
         self._combinations = self._load_combinations()
@@ -849,7 +855,7 @@ class Runner:
             raise ValueError("No filtered genes to perform ORA on. call filter() first.")
         if "combined" not in self.genes.tags:
             self.logger.warn(
-                "No set comnbinations to perform on. ORA is performed for filtered genes only."
+                "No set combinations to perform on. ORA is performed for filtered genes only."
             )
         if genes_to_select is None:
             genes_to_analyze = self.genes.genes_by_tag("filtered")
@@ -921,6 +927,46 @@ class Runner:
             # for item in items:
             #     nb.register_item(item)
             #     break
+
+    def analyze_genes(self):
+        self.register_defaults()
+        jobs = []
+        for genes in self.genes.values():
+            jobs.extend(genes.jobs())
+        return jobs
+
+    def everything(self):
+        self.create_samples()
+        self.align()
+        self.count()
+        self.normalize()
+        self.prefilter()
+        self.deg()
+        self.filter()
+        self.combine()
+        self.write_genes()
+        self.analyze_genes()
+        self.pathways()
+
+    def write_genes(self, mangler_function=None):
+        for genes_name in self.genes:
+            self.genes[genes_name].write(mangler_function)
+
+    def write_genes_by_name(
+        self, genes_name="genes_all", output_filename=None, mangler_function=None
+    ):
+        genes = self.genes[genes_name].genes
+        genes.write(output_filename, mangler_function)
+
+    def write_filtered(self, mangler_function=None):
+        self.write_genes_with_tag("filtered", mangler_function=mangler_function)
+
+    def write_combined(self, mangler_function=None):
+        self.write_genes_with_tag("combined", mangler_function=mangler_function)
+
+    def write_genes_with_tag(self, tag, mangler_function=None):
+        for gene_wrapper in self.genes.genes_by_tag(tag):
+            gene_wrapper.write(mangler_function)
 
 
 def get_class_from_module(module_name: str, class_to_check: str):

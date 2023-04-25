@@ -82,23 +82,23 @@ class MockCounterNorm(MockCounter):
 
 
 class MockDEseq:
-    def __init__(self):
-        self.name = "MockDEseq"
+    def __init__(self, columns_a, columns_b, comparison_name):
+        self.name = f"{comparison_name} MockDEseq"
         self.hash = self.__freeze__()
         self.columns = [
-            "log2FC DESeqMock",
-            "p DESeqMock",
-            "FDR DESeqMock",
-            "baseMean DESeqMock",
-            "lfcSE DESeqMock",
-            "stat DESeqMock",
+            f"log2FC {self.name}",
+            f"p {self.name}",
+            f"FDR {self.name}",
+            f"baseMean {self.name}",
+            f"lfcSE {self.name}",
+            f"stat {self.name}",
         ]
-        self.FDR = "FDR DESeqMock"
-        self.logFC = "log2FC DESeqMock"
-        self.P = "p DESeqMock"
+        self.FDR = f"FDR {self.name}"
+        self.logFC = f"log2FC {self.name}"
+        self.P = f"p {self.name}"
 
     def __freeze__(self):
-        return "MockDEseqABC"
+        return self.name
 
     def __call__(self, df):
         return pd.DataFrame(0, columns=self.columns, index=df.index)
@@ -135,6 +135,10 @@ def return_mocklane(*args):
 
 def return_mocklane_from_row(sample, row):
     return MockRawLane(sample)
+
+
+def return_mock_diff(*args, **kwargs):
+    return MockDEseq(*args, **kwargs)
 
 
 @pytest.fixture
@@ -299,8 +303,6 @@ def test_norm_counter(ana):
 
 
 def just_write(ddf, output_filename=None, mangler_function=None, float_format="%4g"):
-    print("just write called")
-
     def __write(outfile):
         df = ddf.df.copy()
         df.to_csv(outfile, sep="\t", index=False)
@@ -324,12 +326,34 @@ def test_run(ana_pypipe, tmpdir):
         with mock.patch.object(
             mbf.genomics.delayeddataframe.DelayedDataFrame, "write", new=just_write
         ):
-            runner.write_genes("genes_all", tmpdir / "genes_test.tsv")
-            # runner.write_genes("genes_used", tmpdir / "genes_used_test.tsv")
+            runner.write_genes_by_name("genes_all", tmpdir / "genes_test.tsv")
+            runner.write_genes_by_name("genes_used", tmpdir / "genes_used_test.tsv")
         ppg.run()
         df = pd.read_csv(tmpdir / "genes_test.tsv", sep="\t")
         assert "Mock CPM" in df.columns
         assert "Mock raw" in df.columns
+
+
+@pytest.mark.usefixtures("new_pipegraph_no_qc")
+def test_write_genes(ana_pypipe, tmpdir):
+    with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
+        ppg.new()
+        runner = Runner(ana_pypipe)
+        runner.create_samples()
+        runner.raw_samples["sample"].align = MagicMock(side_effect=return_mocklane)
+        runner.align()
+        runner._raw_counter = MockCounterRaw
+        runner.count()
+        runner._normalizer = {"CPM": MockCounterNorm}
+        runner.normalize()
+        runner.prefilter()
+        with mock.patch.object(
+            mbf.genomics.delayeddataframe.DelayedDataFrame, "write", new=just_write
+        ):
+            runner.write_genes()
+        ppg.run()
+        for genes in runner.genes.values():
+            assert (genes.path / f"{genes.genes_name}.tsv").exists()
 
 
 @pytest.mark.usefixtures("new_pipegraph_no_qc")
@@ -426,8 +450,8 @@ def test_prefilter_run(ana_pypipe, tmpdir):
         with mock.patch.object(
             mbf.genomics.delayeddataframe.DelayedDataFrame, "write", new=just_write
         ):
-            runner.write_genes("genes_all", tmpdir / "genes_test.tsv")
-            runner.write_genes("genes_used", tmpdir / "genes_used_test.tsv")
+            runner.write_genes_by_name("genes_all", tmpdir / "genes_test.tsv")
+            runner.write_genes_by_name("genes_used", tmpdir / "genes_used_test.tsv")
         ppg.run()
         df_genes = pd.read_csv(tmpdir / "genes_test.tsv", sep="\t")
         df_genes_used = pd.read_csv(tmpdir / "genes_used_test.tsv", sep="\t")
@@ -460,11 +484,8 @@ def test_get_deg(ana_new, tmpdir):
         runner._normalizer = {"CPM": MockCounterNorm}
         runner.normalize()
         runner.prefilter()
-        transformer = MockDEseq()
         ts_transformer = MockDESeq2Timeseries()
-        with mock.patch.object(
-            mdataframe.differential, "DESeq2Unpaired", new=MagicMock(return_value=transformer)
-        ):
+        with mock.patch.object(mdataframe.differential, "DESeq2Unpaired", new=return_mock_diff):
             with mock.patch.object(
                 mdataframe.differential,
                 "DESeq2Timeseries",
@@ -474,11 +495,12 @@ def test_get_deg(ana_new, tmpdir):
         with mock.patch.object(
             mbf.genomics.delayeddataframe.DelayedDataFrame, "write", new=just_write
         ):
-            runner.write_genes("genes_used", tmpdir / "genes_used_test.tsv")
+            runner.write_genes_by_name("genes_used", tmpdir / "genes_used_test.tsv")
         ppg.run()
         df = pd.read_csv(tmpdir / "genes_used_test.tsv", sep="\t")
-        for column in transformer.columns:
-            assert column in df
+        for diff_anno in runner.differential.values():
+            for column in diff_anno.columns:
+                assert column in df
         assert len(df) == 2
         transformer_caller = runner.differential_wrapper_ab
         diffs = runner.get_differential_transformers("ABpairs", transformer_caller)
@@ -515,11 +537,6 @@ def test_generate_transformer(ana):
     assert isinstance(diff, DESeq2Unpaired)
     assert diff.columns_a == ["sample1"]
     assert diff.columns_b == ["sample2"]
-
-    # def test_get_genes_prefilter_from_analysis(ana):
-    #     runner = Runner(ana)
-    #     filter_func = runner.get_genes_prefilter_from_analysis()
-    #     new_index = filter_func(MockGenome.df_genes)
 
 
 @pytest.mark.usefixtures("new_pipegraph_no_qc")
@@ -565,11 +582,8 @@ def test_filter(ana_new, tmpdir):
         runner._normalizer = {"CPM": MockCounterNorm}
         runner.normalize()
         runner.prefilter()
-        transformer = MockDEseq()
         ts_transformer = MockDESeq2Timeseries()
-        with mock.patch.object(
-            mdataframe.differential, "DESeq2Unpaired", new=MagicMock(return_value=transformer)
-        ):
+        with mock.patch.object(mdataframe.differential, "DESeq2Unpaired", new=return_mock_diff):
             with mock.patch.object(
                 mdataframe.differential,
                 "DESeq2Timeseries",
@@ -594,10 +608,7 @@ def test_ora(ana_new):
         runner._normalizer = {"CPM": MockCounterNorm}
         runner.normalize()
         runner.prefilter()
-        transformer = MockDEseq()
-        with mock.patch.object(
-            mdataframe.differential, "DESeq2Unpaired", new=MagicMock(return_value=transformer)
-        ):
+        with mock.patch.object(mdataframe.differential, "DESeq2Unpaired", new=return_mock_diff):
             runner.deg()
         runner.filter()
         runner.combine()
@@ -612,51 +623,70 @@ def test_ora(ana_new):
         ppg.run()
 
 
-# @pytest.mark.usefixtures("new_pipegraph_no_qc")
-# def test_pathways(ana_new, tmp_path):
-#     del ana_new.comparison["timeseries"]
-#     outfile = tmp_path / "mockrun.txt"
+@pytest.mark.usefixtures("new_pipegraph_no_qc")
+def test_pathways(ana_new, tmp_path):
+    del ana_new.comparison["timeseries"]
+    gsea_file = tmp_path / "mockrun.gsea.txt"
+    ora_file = tmp_path / "mockrun.ora.txt"
 
-#     def mockrun(*args, **kwargs):
-#         with (outfile).open("w") as out:
-#             for arg in args:
-#                 out.write(str(arg) + "\n")
-#             for key, value in kwargs.items():
-#                 out.write(f"{str(key)}:{str(value)}\n")
-#         return args, kwargs
+    def mockrun(pathway_analysis):
+        if pathway_analysis == "GSEA":
+            outfile = gsea_file
+        elif pathway_analysis == "ORA":
+            outfile = ora_file
+        else:
+            raise NotImplementedError()
 
-#     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
-#         ppg.new()
-#         runner = Runner(ana_new)
-#         runner.create_raw = return_mocklane_from_row
-#         runner.create_samples()
-#         runner.align()
-#         runner._raw_counter = MockCounterRaw
-#         runner.count()
-#         runner._normalizer = {"CPM": MockCounterNorm}
-#         runner.normalize()
-#         runner.prefilter()
-#         transformer = MockDEseq()
-#         with mock.patch.object(
-#             mdataframe.differential, "DESeq2Unpaired", new=MagicMock(return_value=transformer)
-#         ):
-#             runner.deg()
-#             runner.filter()
-#         with mock.patch.object(mpathways.gsea.GSEA, "run_on_counts", new=mockrun):
-#             runner.pathways()
-#         ppg.run()
-#         assert outfile.exists()
-#         with outfile.open("r") as inp:
-#             out = inp.read()
-#             assert "GSEA" in out
-#             assert "Genes(Genes_MockGenome_chr_biotypes_thresholds_drop_empty_names)" in out
-#             assert "comparison_name:C_vs_D(B)" in out
-#             assert "phenotypes:['C', 'D']" in out
-#             assert "columns_a_b:(['S5 CPM', 'S6 CPM'], ['S7 CPM', 'S8 CPM'])" in out
-#             assert "collection:c2" in out
-#             assert "annotators:[Annotator(S1 CPM)" in out
-#             assert "median:True" in out
-#             assert "permutations:1000" in out
+        def run(*args, **kwargs):
+            print("run called")
+            print(pathway_analysis, outfile)
+            with (outfile).open("w") as out:
+                out.write(pathway_analysis + "\n")
+                for arg in args:
+                    out.write(str(arg) + "\n")
+                for key, value in kwargs.items():
+                    out.write(f"{str(key)}:{str(value)}\n")
+            print(outfile.exists())
+            return args, kwargs
+
+        return run
+
+    with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
+        ppg.new()
+        runner = Runner(ana_new)
+        runner.create_raw = return_mocklane_from_row
+        runner.create_samples()
+        runner.align()
+        runner._raw_counter = MockCounterRaw
+        runner.count()
+        runner._normalizer = {"CPM": MockCounterNorm}
+        runner.normalize()
+        runner.prefilter()
+        with mock.patch.object(mdataframe.differential, "DESeq2Unpaired", new=return_mock_diff):
+            runner.deg()
+        runner.filter()
+        runner.combine()
+        with mock.patch.object(mpathways.gsea.GSEA, "run_on_counts", new=mockrun("GSEA")):
+            with mock.patch.object(mpathways.ora.ORAHyper, "run", new=mockrun("ORA")):
+                runner.pathways()
+        ppg.run()
+        assert gsea_file.exists()
+        assert ora_file.exists()
+        with gsea_file.open("r") as inp:
+            out = inp.read()
+            assert "GSEA" in out
+            assert "Genes(Genes_MockGenome_chr_biotypes_thresholds_drop_empty_names)" in out
+            assert "comparison_name:C_vs_D(B)" in out
+            assert "phenotypes:['C', 'D']" in out
+            assert "columns_a_b:(['S5 CPM', 'S6 CPM'], ['S7 CPM', 'S8 CPM'])" in out
+            assert "collection:c2" in out
+            assert "annotators:[Annotator(S1 CPM)" in out
+            assert "median:True" in out
+            assert "permutations:1000" in out
+        with gsea_file.open("r") as inp:
+            out = inp.read()
+            print(out)
+            assert "Genes(Genes_MockGenome_chr_biotypes_thresholds_drop_empty_names)" in out
 
 
 @pytest.mark.usefixtures("new_pipegraph_no_qc")
@@ -673,10 +703,7 @@ def test_filtered_genes_to_analyze(ana_new):
         runner._normalizer = {"CPM": MockCounterNorm}
         runner.normalize()
         runner.prefilter()
-        transformer = MockDEseq()
-        with mock.patch.object(
-            mdataframe.differential, "DESeq2Unpaired", new=MagicMock(return_value=transformer)
-        ):
+        with mock.patch.object(mdataframe.differential, "DESeq2Unpaired", new=return_mock_diff):
             runner.deg()
         with pytest.raises(ValueError) as info:
             runner.filtered_genes_to_analyze()
@@ -686,7 +713,7 @@ def test_filtered_genes_to_analyze(ana_new):
             runner.filtered_genes_to_analyze()
             msg = captured.records[0].getMessage()
             assert (
-                "No set comnbinations to perform on. ORA is performed for filtered genes only."
+                "No set combinations to perform on. ORA is performed for filtered genes only."
                 in msg
             )
         runner.combine()
@@ -710,10 +737,7 @@ def test_write_filtered(ana_new):
         runner._normalizer = {"CPM": MockCounterNorm}
         runner.normalize()
         runner.prefilter()
-        transformer = MockDEseq()
-        with mock.patch.object(
-            mdataframe.differential, "DESeq2Unpaired", new=MagicMock(return_value=transformer)
-        ):
+        with mock.patch.object(mdataframe.differential, "DESeq2Unpaired", new=return_mock_diff):
             runner.deg()
         with pytest.raises(ValueError) as info:
             runner.filtered_genes_to_analyze()
@@ -753,11 +777,8 @@ def test_register_volcano(ana_new, tmpdir):
         runner._normalizer = {"CPM": MockCounterNorm}
         runner.normalize()
         runner.prefilter()
-        transformer = MockDEseq()
         ts_transformer = MockDESeq2Timeseries()
-        with mock.patch.object(
-            mdataframe.differential, "DESeq2Unpaired", new=MagicMock(return_value=transformer)
-        ):
+        with mock.patch.object(mdataframe.differential, "DESeq2Unpaired", new=return_mock_diff):
             with mock.patch.object(
                 mdataframe.differential,
                 "DESeq2Timeseries",
@@ -774,7 +795,7 @@ def test_register_volcano(ana_new, tmpdir):
                 mod = genes.modules[module_name]
                 assert isinstance(mod, VolcanoModule)
                 assert (genes.path / f"{module_name}.png") in mod.outputs
-        
+
 
 @pytest.mark.usefixtures("new_pipegraph_no_qc")
 def test_register_pca(ana_new, tmpdir):
@@ -797,11 +818,8 @@ def test_register_pca(ana_new, tmpdir):
         runner._normalizer = {"CPM": MockCounterNorm}
         runner.normalize()
         runner.prefilter()
-        transformer = MockDEseq()
         ts_transformer = MockDESeq2Timeseries()
-        with mock.patch.object(
-            mdataframe.differential, "DESeq2Unpaired", new=MagicMock(return_value=transformer)
-        ):
+        with mock.patch.object(mdataframe.differential, "DESeq2Unpaired", new=return_mock_diff):
             with mock.patch.object(
                 mdataframe.differential,
                 "DESeq2Timeseries",
@@ -819,17 +837,27 @@ def test_register_pca(ana_new, tmpdir):
             module_name = f"{genes.genes_name}.all.{counter}.pca"
             assert_module(module_name, genes)
 
-# def register_volcano(
-#     self, tag: str, comparison_names: Optional[List[str]] = None, **parameters
-# ) -> None:
-#     if comparison_names is None:
-#         comparison_names = list(self.differential.keys())
-#     for comparison_name in comparison_names:
-#         module = self.create_volcano_module(comparison_name)
-#         annotators, dependencies = self.get_annos_deps_from_differential(comparison_name)
-#         self.genes.register_module_for_tag(
-#             tag,
-#             module,
-#             annotators=annotators,
-#             dependencies=dependencies,
-#         )
+
+@pytest.mark.usefixtures("new_pipegraph_no_qc")
+def test_everything(ana_new, tmp_path):
+    del ana_new.comparison["timeseries"]
+    with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
+        with mock.patch.object(mdataframe.differential, "DESeq2Unpaired", new=return_mock_diff):
+            with mock.patch.object(
+                mpathways.gsea.GSEA, "run_on_counts", new=lambda *args, **kwargs: (None, True)
+            ):
+                with mock.patch.object(
+                    mpathways.ora.ORAHyper, "run", new=lambda *args, **kwargs: True
+                ):
+                    with mock.patch.object(
+                        mbf.genomics.delayeddataframe.DelayedDataFrame, "write", new=just_write
+                    ):
+                        ppg.new()
+                        runner = Runner(ana_new)
+                        runner.create_raw = return_mocklane_from_row
+                        runner._raw_counter = MockCounterRaw
+                        runner._normalizer = {"CPM": MockCounterNorm}
+                        runner.everything()
+                        ppg.run()
+                        for genes in runner.genes.values():
+                            assert (genes.path / f"{genes.genes_name}.tsv").exists()
