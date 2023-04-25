@@ -186,6 +186,24 @@ def test_runner_init(ana):
     assert isinstance(runner.gsea, mpathways.GSEA)
 
 
+def test_runner_generate_combinations_none(ana):
+    ana.combinations = {}
+    runner = Runner(ana)
+    assert runner.combinations is None
+    combined = runner.generate_combinations()
+    assert combined == {}
+
+
+def test_runner_generate_combinations(ana):
+    runner = Runner(ana)
+    assert runner.combinations is not None
+    with mock.patch.object(runner, "combine_genes", new=lambda *_, **__: "gene"):
+        combined = runner.generate_combinations()
+        print(combined)
+        for genes in ["C_vs_D_A_or_B", "C_vs_D_A_and_B", "C_vs_D_A_only"]:
+            assert genes in combined
+
+
 @pytest.mark.usefixtures("new_pipegraph_no_qc")
 def test_runner_create_raw(ana_pypipe):
     runner = Runner(ana_pypipe)
@@ -833,6 +851,7 @@ def test_register_pca(ana_new, tmpdir):
         for genes in runner.genes.genes_by_tag("filtered"):
             for comparison_name in runner.differential:
                 module_name = f"{genes.genes_name}.{comparison_name}.{counter}.pca"
+
                 assert_module(module_name, genes)
             module_name = f"{genes.genes_name}.all.{counter}.pca"
             assert_module(module_name, genes)

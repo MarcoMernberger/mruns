@@ -29,6 +29,7 @@ from mbf import align
 from mbf.genomics.genes.anno_tag_counts import _NormalizationAnno, _FastTagCounter
 from pypipegraph2 import Job
 from mbf.genomics.annotator import Annotator
+from mbf.genomics.genes import Genes
 from .base import Analysis
 from mdataframe import Filter, _Transformer
 from .mbf_compliance import (
@@ -815,24 +816,30 @@ class Runner:
             inherited_tags.update(new_tags)
         return inherited_tags
 
+    def combine_genes(
+        self, new_name: str, genes_names_to_combine: List[str], operation: str
+    ) -> Genes:
+        genes_wrapped_to_combine = [self.genes[gene_name] for gene_name in genes_names_to_combine]
+        generator = self.analysis.get_generator(operation)
+        combined = generator(new_name, [g.genes for g in genes_wrapped_to_combine])
+        inherited_tags = self.get_tags_from_parents(genes_wrapped_to_combine)
+        combined_wrapped = GenesWrapper(
+            combined,
+            outpath=self.combined_path() / new_name,
+            tags=["combined", new_name] + list(inherited_tags),
+        )
+        return combined_wrapped
+
     def generate_combinations(self):
         combined_genes = {}
-        for _, row in self.combinations.iterrows():
-            new_name = row["combined_name"]
-            genes_names_to_combine = row["gene_names"].split(",")
-            genes_wrapped_to_combine = [
-                self.genes[gene_name] for gene_name in genes_names_to_combine
-            ]
-            generator = self.analysis.get_generator(row["operation"])
-            combined = generator(new_name, [g.genes for g in genes_wrapped_to_combine])
-            inherited_tags = self.get_tags_from_parents(genes_wrapped_to_combine)
-            combined_wrapped = GenesWrapper(
-                combined,
-                outpath=self.combined_path() / new_name,
-                tags=["combined", new_name] + list(inherited_tags),
-            )
-            combined_genes[new_name] = combined_wrapped
-        return combined_genes
+        if self.combinations is not None:
+            for _, row in self.combinations.iterrows():
+                new_name = row["combined_name"]
+                combined_wrapped = self.combine_genes(
+                    new_name, row["gene_names"].split(","), row["operation"]
+                )
+                combined_genes[new_name] = combined_wrapped
+            return combined_genes
 
     def combined_path(self):
         return self.analysis.outpath / "Genes" / self._genes_used.name / "combined"
