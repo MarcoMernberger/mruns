@@ -200,9 +200,15 @@ class Analysis:
             print("outside ppg")
         self.set_genome()
         self.comparison_incoming = self.read_comparison_tables()
+        self.verify_frames()
+        # self.comparisons_to_do = self.parse_comparisons()
+
+    def verify_frames(self):
         self.verify_samples()
         self.verify_groups()
-        # self.comparisons_to_do = self.parse_comparisons()
+        if "gsea" in self.pathways:
+            if "file" in "file" in self.pathways["gsea"]:
+                self.verify_gsea()
 
     def set_genome(self):
         print("setting genome")
@@ -587,6 +593,15 @@ class Analysis:
                 raise ValueError(
                     f"The groups table for {group} does not contain the following required columns {not_present}."
                 )
+
+    def verify_gsea(self):
+        df_gsea = pd.read_csv(self.incoming / self.pathways["gsea"]["file"], sep="\t")
+        required = pd.Index(["a", "b", "comparison_name", "groupby"])
+        missing = required.difference(df_gsea.columns)
+        if len(missing) != 0:
+            raise ValueError(
+                f"The following required columns were missing in the gsea config file: {missing}.\nColumns were: {df_gsea.columns}."
+            )
 
     def fastq_processor(self) -> Any:
         """

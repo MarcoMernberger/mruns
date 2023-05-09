@@ -187,7 +187,7 @@ def test_runner_init(ana):
 
 
 def test_runner_generate_combinations_none(ana):
-    ana.combinations = {}
+    ana.combination = {}
     runner = Runner(ana)
     assert runner.combinations is None
     combined = runner.generate_combinations()

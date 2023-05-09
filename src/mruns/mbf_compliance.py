@@ -149,7 +149,6 @@ class GenesWrapper:
         module.outputs = self.fix_outputs(module.outputs)
         # set name
         module.name = f"{module.outputs[0].stem}"
-        print(module.outputs)
         # set inputs
         module.old_inputs = module.sources.copy()
         module.sources = self.fix_inputs(module.sources, rename_columns)

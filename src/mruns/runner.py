@@ -685,7 +685,8 @@ class Runner:
         for comparison_name in self.differential:
             self.register_volcano(comparison_name)
         self.register_pca("filtered")
-        self.register_pca("combined")
+        if self.combinations is not None:
+            self.register_pca("combined")
 
     def register_volcano(
         self, tag: str, comparison_names: Optional[List[str]] = None, **parameters
@@ -839,7 +840,7 @@ class Runner:
                     new_name, row["gene_names"].split(","), row["operation"]
                 )
                 combined_genes[new_name] = combined_wrapped
-            return combined_genes
+        return combined_genes
 
     def combined_path(self):
         return self.analysis.outpath / "Genes" / self._genes_used.name / "combined"
