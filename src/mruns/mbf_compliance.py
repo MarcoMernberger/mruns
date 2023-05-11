@@ -28,6 +28,7 @@ class GenesWrapper:
         outpath: Path,
         tags: List[str] = [],
         name: Optional[str] = None,
+        description: Optional[str] = None,
     ):
         """
         GenesWrapper Constructor.
@@ -57,6 +58,7 @@ class GenesWrapper:
         self.__tags = set(tags)
         self.__tags.add(self.genes_name)
         self.__tags.add("all")
+        self.decription = description
 
     @property
     def tags(self):
@@ -76,12 +78,17 @@ class GenesWrapper:
     def genes_df(self):
         return self.genes.df
 
-    def jobify(self) -> List[Job]:
-        jobs = []
+    def jobify(self):
+        self._module_jobs = {}
         for module_name in self.__modules:
             job = self.jobify_module(module_name)
-            jobs.append(job)
-        return jobs
+            self._module_jobs[module_name] = job
+
+    def get_module_job(self, module_name: str) -> Job:
+        if not hasattr(self, "_module_jobs"):
+            raise ValueError(f"{self.name} has no jobs. Call jobify first.")
+        else:
+            return self._module_jobs[module_name]
 
     def jobify_module(self, module_name: str) -> Job:
         module = self.__modules[module_name]
@@ -95,7 +102,9 @@ class GenesWrapper:
 
     def jobs(self):
         jobs = [self.genes.load(), self.genes.write()[0]]
-        jobs.extend(self.jobify())
+        if not hasattr(self, "_module_jobs"):
+            self.jobify()
+        jobs.extend(list(self._module_jobs.values()))
         return jobs
 
     def write(self, mangler_function: Optional[Callable] = None):

@@ -32,6 +32,8 @@ from mbf.genomics.annotator import Annotator
 from mbf.genomics.genes import Genes
 from .base import Analysis
 from mdataframe import Filter, _Transformer
+from mreports import NB
+from mreports import NB, MarkdownItem, HTMLItem, PlotItem, GSEAHTMLItem
 from .mbf_compliance import (
     # FromTransformerWrapper,
     DifferentialWrapper,
@@ -101,10 +103,28 @@ class Runner:
                     self._genes_all,
                     self.results / self._genes_all.name,
                     ["genes_all"],
+                    description=f"All Genes from {self.genome}",
                 )
             }
         )
         self.gsea = GSEA()
+        self._init_report()
+
+    def _init_report(self):
+        """
+        Generates a NB to collect plots with a name given in the run.toml.
+
+        Returns
+        -------
+        NB
+            The NB instance to use.
+        """
+        dependencies = [
+            ppg.FunctionInvariant("FI_ana", self.analysis.summary_markdown),
+            ppg.FunctionInvariant("FI_ana", self.analysis.summary_markdown),
+        ]
+        nb = NB(self.analysis.report_name(), dependencies=dependencies)
+        self._report = nb
 
     def _get_genome(self):
         ppg.new()
@@ -181,6 +201,11 @@ class Runner:
     def genes(self):
         "Collection of all wrapped genes object"
         return self._genes_collection
+
+    @property
+    def report(self):
+        "Collection of all wrapped genes object"
+        return self._report
 
     @property
     def combinations(self):
@@ -327,7 +352,7 @@ class Runner:
             if stranded:
                 return mbf.genomics.genes.anno_tag_counts.ExonSmartStrandedRust
             else:
-                raise NotImplementedError
+                return mbf.genomics.genes.anno_tag_counts.ExonSmartUnstrandedRust
         else:
             raise NotImplementedError  # TODO: to toml for more fine-grained control
 
@@ -496,18 +521,20 @@ class Runner:
         genes_used = self.genes_all
         pre_filter = self.get_genes_prefilter_from_analysis()
         if pre_filter is not None:
-            filtered_name = "_".join(
-                [self.genes_all.name] + list(self.analysis.genes["filter"].keys())
-            )
+            filtered_name = self.analysis.genes_used_name()
             genes_used = self.genes_all.filter(
                 filtered_name,
                 pre_filter,
                 annotators=self.get_count_annotators(),
             )
+        decription = "\n".join(
+            f"{self.analysis.genes_used_name()}, {self.analysis.genes_used_description()}"
+        )
         genes_wrapped = GenesWrapper(
             genes=genes_used,
             outpath=Path(f"results/{genes_used.name}"),
             tags=["genes_used"],
+            description=decription,
         )
         self._genes_collection["genes_used"] = genes_wrapped
         self._genes_used = genes_used
@@ -658,7 +685,8 @@ class Runner:
         columns = differential.columns
         outfile = Path(f"{comparison_name}.volcano.png")
         inputs = {"df": columns}
-        return [outfile, inputs], module_parameters
+        description = f"#### Volcano plot for {comparison_name}"
+        return [outfile, inputs, description], module_parameters
 
     def get_counter_columns_to_sample(
         self, samples: List[str], counter_name: str
@@ -678,7 +706,8 @@ class Runner:
             "df_samples": self.samples,
         }
         outfile = Path(f"{prefix}.{counter_name}.pca.png")
-        return [outfile, inputs], {}, rename
+        description = "#### PCA {prefix} using {counter_name} values"
+        return [outfile, inputs, description], {}, rename
 
     def register_defaults(self) -> None:
         """register default jobs with the genes"""
@@ -765,10 +794,12 @@ class Runner:
                 new_name = "_".join([comparison_name, suffix])
                 genes_filtered = self.__filter_genes(new_name, comparison_name, filter_expr)
                 path_filtered = self._genes_collection["genes_used"].path / genes_filtered.name
+                description = f"Comparison {comparison_name}, using {self.differential[comparison_name].transformer.name}\n Genes filtered by {suffix}\n"
                 genes_filtered_wrapped = GenesWrapper(
                     genes_filtered,
                     path_filtered,
                     tags=["filtered", comparison_group, comparison_name, new_name],
+                    description=description,
                 )
                 self._genes_collection[new_name] = genes_filtered_wrapped
 
@@ -824,10 +855,12 @@ class Runner:
         generator = self.analysis.get_generator(operation)
         combined = generator(new_name, [g.genes for g in genes_wrapped_to_combine])
         inherited_tags = self.get_tags_from_parents(genes_wrapped_to_combine)
+        description = f"{new_name}, combined using {operation} on:\n{genes_names_to_combine}"
         combined_wrapped = GenesWrapper(
             combined,
             outpath=self.combined_path() / new_name,
             tags=["combined", new_name] + list(inherited_tags),
+            description=description,
         )
         return combined_wrapped
 
@@ -906,12 +939,16 @@ class Runner:
         collections = self.analysis.get_collections_for_runner("gsea")
         counter = self.analysis.pathways["gsea"]["counter"]
         annotators = list(self.norm[counter].values())
-        jobs_and_index = []
+        jobs_and_index = {}
         for _, row in self.gseas.iterrows():
             comparison_name = row["comparison_name"]
-            phenotypes = row["phenoptypes"].split(",")
+            phenotypes = row["phenotypes"].split(",")
             columns_ab = self.get_columns_ab_for_gsea_by_row(row)
+            jobs_and_index[comparison_name] = {}
             for collection in collections:  # collections_ipa + collections_msig:
+                collection_name = (
+                    ",".join(collection) if isinstance(collection, list) else collection
+                )
                 job, index_html = self.gsea.run_on_counts(
                     self.genes_used,
                     comparison_name=comparison_name,
@@ -922,16 +959,19 @@ class Runner:
                     annotators=annotators,
                     **parameter,
                 )
-                jobs_and_index.append((job, index_html))
+                jobs_and_index[comparison_name][collection_name] = (job, index_html)
         return jobs_and_index
 
     def pathways(self):
         """perform pathway analysis"""
         for pathway_method in self.analysis.pathways:
             if pathway_method == "ora":
-                self.run_ora()
+                gene_names_to_jobs = self.run_ora()
+                self.__ora_results = gene_names_to_jobs
             if pathway_method == "gsea":
-                self.run_gsea()
+                jobs_and_html = self.run_gsea()
+                self.__gsea_results = jobs_and_html
+
             # for item in items:
             #     nb.register_item(item)
             #     break
@@ -955,6 +995,7 @@ class Runner:
         self.write_genes()
         self.analyze_genes()
         self.pathways()
+        self.generate_report()
 
     def write_genes(self, mangler_function=None):
         for genes_name in self.genes:
@@ -975,6 +1016,66 @@ class Runner:
     def write_genes_with_tag(self, tag, mangler_function=None):
         for gene_wrapper in self.genes.genes_by_tag(tag):
             gene_wrapper.write(mangler_function)
+
+    def generate_report(self):
+        self.report.register_item(
+            MarkdownItem("Top", self.analysis.summary_markdown(), color=False)
+        )
+        tags = ["genes_used"] + list(self.differential.keys())
+        if self.combinations is not None:
+            tags.append("combined")
+        for tag in tags:
+            if tag in self.differential:
+                md = MarkdownItem(
+                    section=tag,
+                    text="### Differential Expression Analysis {tag}",
+                )
+            elif tag == "combined":
+                md = MarkdownItem(
+                    section=tag,
+                    text="### Set combinations on genes",
+                )
+            for genes_wrapped in self.genes.genes_by_tag(tag):
+                genes_name = genes_wrapped.genes.name
+                md = MarkdownItem(
+                    section=tag,
+                    text=genes_wrapped.decription,
+                )
+                self.report.register_item(md)
+                for module_name in genes_wrapped.modules:
+                    module = genes_wrapped.modules[module_name]
+                    module_job = genes_wrapped.get_module_job(module_name)
+                    if module.is_figure:
+                        pl = PlotItem(
+                            section=tag,
+                            job=module_job,
+                            text=module.description,
+                        )
+                        self.report.register_item(pl)
+                    else:
+                        raise NotImplementedError
+                # add ORAs if present:
+                if genes_name in self.__ora_results:
+                    for collection in self.__ora_results[genes_name]:
+                        pl = PlotItem(
+                            section=tag,
+                            job=self.__ora_results[genes_name][collection],
+                            text=f"#### Over-Representation Analysis using hypergeometric test on DE genes from {genes_name} with collection {collection}",
+                        )
+                        self.report.register_item(pl)
+                # add gsea
+            if tag in self.__gsea_results:  # if tag is a comparison_name
+                for collection in self.__gsea_results[tag]:
+                    job, index_html = self.__gsea_results[tag][collection]
+                    html = GSEAHTMLItem(
+                        section=tag,
+                        filename=index_html,
+                        job=job,
+                    )
+                    self.report.register_item(html)
+        self.report.register_item(
+            MarkdownItem("Bottom", self.analysis.specification(), color=False)
+        )
 
 
 def get_class_from_module(module_name: str, class_to_check: str):

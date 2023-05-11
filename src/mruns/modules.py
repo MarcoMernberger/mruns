@@ -23,8 +23,17 @@ __license__ = "mit"
 
 
 class Module(ABC):
-    def __init__(self, name: str, inputs: Dict[str, Union[Callable, Any, str, Path]], **parameters):
+    def __init__(
+        self,
+        name: str,
+        inputs: Dict[str, Union[Callable, Any, str, Path]],
+        description: Optional[str] = None,
+        **parameters,
+    ):
         self.name = name
+        self._description = description
+        if self._description is None:
+            self.description = self.name
         self._parameters = parameters
         self._inputs = inputs
         self._outputs: List[Path] = []
@@ -102,6 +111,13 @@ class Module(ABC):
     def create_outputs(self, *args):
         pass
 
+    @property
+    def is_figure(self):
+        for path in self.outputs:
+            if path.suffix in [".png", ".svg", ".jpg"]:
+                return True
+        return False
+
 
 class VolcanoModule(Module):
 
@@ -114,10 +130,11 @@ class VolcanoModule(Module):
         outfile: Path,
         inputs: Dict[str, Union[Callable, Any]],
         name: Optional[str] = None,
+        description: Optional[str] = None,
         **parameters,
     ):
         name = str(outfile) if name is None else name
-        super().__init__(name, inputs, **parameters)
+        super().__init__(name, inputs, description, **parameters)
         self._outputs = [
             outfile,
             outfile.with_suffix(".tsv"),
@@ -172,10 +189,11 @@ class PCAModule(Module):
         outfile: Path,
         inputs: Dict[str, Union[Callable, Any]],
         name: Optional[str] = None,
+        description: Optional[str] = None,
         **parameters,
     ):
         name = str(outfile) if name is None else name
-        super().__init__(name, inputs, **parameters)
+        super().__init__(name, inputs, description, **parameters)
         self._outputs = [
             outfile,
             outfile.with_suffix(".tsv"),

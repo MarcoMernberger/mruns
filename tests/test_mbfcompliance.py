@@ -182,8 +182,9 @@ class Test_GenesWrapper:
         gw.register_module(module, dependencies)
         mod_job = gw.jobify_module("MockModule")
         assert isinstance(mod_job, ppg2.Job)
-        jobs = gw.jobify()
-        assert jobs[0] == mod_job
+        gw.jobify()
+        jobs = gw._module_jobs
+        assert jobs["MockModule"] == mod_job
         assert len(jobs) == 1
         jobs = gw.jobs()
         assert len(jobs) == 3

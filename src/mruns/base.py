@@ -679,6 +679,12 @@ class Analysis:
     #     else:
     #         raise NotImplementedError
 
+    def report_name(self) -> str:
+        if "name" in self.reports:
+            return self.reports["name"]
+        else:
+            return "run_report"
+
     def report(self) -> NB:
         """
         Generates a NB to collect plots with a name given in the run.toml.
@@ -848,7 +854,7 @@ class Analysis:
         """
         pp = PrettyPrinter(indent=4)
         d = vars(self).copy()
-        del d["jobs"]
+        #del d["jobs"]
         return "Analysis(\n" + pp.pformat(d) + "\n)"
 
     def display_summary(self):
@@ -871,8 +877,8 @@ class Analysis:
             Summary of run settings.
         """
         pp = PrettyPrinter(indent=4)
-        report_header = f"## Analysis from toml file '{self.run_toml}'\n"
-        genome_name = self.genome.name if hasattr(self, "genome") else "not set!"
+        report_header = f"## Analysis specification from toml file '{self.run_toml}'\n"
+        genome_name = f"{self.alignment['species']}, {self.alignment['revision']}"
         report_header += f"Genome used: {genome_name}  \n"
         aligner, aligner_params = self.aligner()
         report_header += f"Aligner used: {aligner.name} with parameter {aligner_params}  \n"
@@ -882,63 +888,25 @@ class Analysis:
         if self.post_processor is not None:
             postprocessor_name = self.post_processor().__class__.__name__
         report_header += f"Alignment Postprocessor: {postprocessor_name} \n"
-        raw_counter = self.raw_counter()
-        norm_counter = self.norm_counter()
-        report_header += f"Raw counter: {raw_counter.__name__}  \n"
-        report_header += f"Norm counter: {norm_counter.__name__}  \n"
+        report_header += f"Norm counters requested:  \n"
+        for key in self.normalization:
+            report_header += f"{key}={self.normalization[key]}  \n"
         report_header += "\n### Samples  \n  \n"
         df_samples = self.sample_df()
         report_header += df_to_markdown_table(df_samples)
         report_header += "\n\n### Comparisons requested  \n"
         for group_name in self.comparison:
             report_header += f"Comparison group: '{group_name}' \n"
-            method_name = self.comparison_method_name(self.comparison[group_name])
-            report_header += f"\nMethod: {method_name}"
-            comp_type = self.comparison[group_name]["type"]
-            if comp_type == "ab":
-                report_header += "(a vs b) \n\n"
-            elif comp_type == "multi":
-                report_header += "(multi) \n\n"
-            else:
-                raise ValueError("Don't know what to do with type {comp_type}.")
-            # filepath = self.filepath_from_incoming(self.comparison[group_name]["file"])
+            report_header += f"DGE method = {self.comparison[group_name]['method']}  \n"
+            report_header += f"Comparison type = {self.comparison[group_name]['type']}  \n"
             df_in = self.get_comparison_group_table(group_name)  # pd.read_csv(filepath, sep="\t")
             report_header += df_to_markdown_table(df_in) + "\n"
-        report_header += f"\n### Genes  \n"
-        genes_used_name = f"Genes_{self.genome.name}"
-        if self.has_gene_filter_specified():
-            report_header += "Genes filtered prior to DE analysis by:  \n"
-            if "canonical" in self.genes["filter"] and self.genes["filter"]["canonical"]:
-                report_header += "- canonical chromosomes only\n"
-                genes_used_name += "_canonical"
-            if "biotypes" in self.genes["filter"]:
-                at_least = self.genes["filter"].get("at_least", 1)
-                report_header += f"- biotype in {pp.pformat(self.genes['filter']['biotypes'])}\n"
-                genes_used_name += "_biotypes"
-            if "cpm_threshold" in self.genes["filter"]:
-                threshold = self.genes["filter"]["cpm_threshold"]
-                report_header += (
-                    f"- at least {at_least} samples with normalized expression >= {threshold}\n"
-                )
-                genes_used_name += f"_{at_least}samples>={threshold}"
+        report_header += "\n### Genes  \n"
+        genes_used_name = self.genes_used_name()
         report_header += f"Genes used: {genes_used_name}  \n"
+        if self.has_gene_filter_specified():
+            report_header += f"Genes used for DE analysis are: \n{self.genes_used_description()}"
         report_header += "\n### Comparisons  \n"
-        for condition_group in self.comparison:
-            report_header += f"From '{condition_group}':  \n"
-            for comparison_name in self.comparisons_to_do[condition_group]:
-                params = self.comparisons_to_do[condition_group][comparison_name]
-                comp_type = params["type"]
-                if comp_type == "ab":
-                    if params["options"]["include_other_samples_for_variance"]:
-                        x = "fit on all samples"
-                    else:
-                        x = "fit on conditions"
-                    desc = f"- compare {params['cond1']} vs {params['cond2']} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
-                    report_header += desc
-                else:
-                    factors = ",".join([f"{x}({y})" for x, y in params["factor_reference"].items()])
-                    desc = f"- compare {comparison_name} with {factors} using {params['method_name']} (offset={params['options']['laplace_offset']}, {x})  \n"
-                    report_header += desc
         report_header += "\n### Pathway Analysis  \n"
         for pathway_method in self.pathways:
             parameter = {}
@@ -1040,6 +1008,41 @@ class Analysis:
 
     def get_gsea_parameter(self):
         return dict(self.pathways["gsea"].get("parameter", {}))
+
+    def genes_used_description(self):
+        """"""
+        pp = PrettyPrinter(indent=4)
+        if self.has_gene_filter_specified():
+            desc = "filtered by:  \n"
+            if "chr" in self.genes["filter"]:
+                desc += f"chr = {self.genes['filter']}\n"
+            if "biotypes" in self.genes["filter"]:
+                desc += f"biotype in {pp.pformat(self.genes['filter']['biotypes'])}\n"
+            if "thresholds" in self.genes["filter"]:
+                for filter_spec in self.genes["filter"]["thresholds"]:
+                    filter_str = " ".join([str(x) for x in filter_spec])
+                    desc += filter_str + "\n"
+        else:
+            desc = "unfiltered"
+
+    def genes_used_name(self):
+        """Get the name for the genes used"""
+        genes_used_name = f"Genes_{self.genome.name}"
+        if self.has_gene_filter_specified():
+            if "chr" in self.genes["filter"]:
+                genes_used_name += f"_chr={self.genes['filter']['chr']}"
+            if "biotypes" in self.genes["filter"]:
+                genes_used_name += "_biotypes"
+            if "thresholds" in self.genes["filter"]:
+                for filter_spec in self.genes["filter"]["thresholds"]:
+                    filter_str = "".join([str(x) for x in filter_spec])
+                    genes_used_name += f"_{filter_str}"
+            if (
+                "drop_empty_names" in self.genes["filter"]
+                and self.genes["filter"]["drop_empty_names"]
+            ):
+                genes_used_name += "_drop_empty_names"
+        return genes_used_name
 
 
 def analysis(req_file: Path = Path("run.toml")) -> Analysis:

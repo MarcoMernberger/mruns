@@ -4,7 +4,7 @@
 """defaults.py: Contains standard plots and analyses."""
 
 from pathlib import Path
-from typing import Optional, Callable, List, Dict, Tuple, Any, ClassVar, Union, Literal
+from typing import Optional, Callable, List, Dict, Tuple, Any, ClassVar, Union
 from pandas import DataFrame
 from mpathways import GSEA, GMTCollection, MSigChipEnsembl, MSigDBCollection, ORAHyper
 from mdataframe import MDF, ClassLabel
@@ -362,8 +362,6 @@ class ORA:
                     collections = self.analysis.pathways[pathway_method]["collections"]
                 # run ora
                 for collection in collections:
-                    print(self.genes_used.genome)
-                    print(self.genes_used)
                     he = ORAHyper(
                         name=f"ORA({collection})",
                         genome=self.genes_used.genome,
@@ -385,15 +383,16 @@ class ORA:
     def get_oras(self):
         return self.hes
 
-    def run_ora(self) -> List[Item]:
+    def run_ora(self) -> Dict[str, Dict[str, Job]]:
         # downstream analyses
-        items = []
+        items: Dict[str, Dict[str, Job]] = {}
         for genes_wrapper in self.genes_to_analyze:
             genes = genes_wrapper.genes
-            print("genes", genes)
+            genes_name = genes.name
+            items[genes_name] = {}
             for he in self.get_oras():
+                collection_name = he.collection.name
                 job = he.run(genes)
-                print(job)
                 # plotjobs = he.plot_bars(job).plot
                 # pl = PlotItem(
                 #     self.genes_parameters[genes.name]["section"],
@@ -401,4 +400,5 @@ class ORA:
                 #     f"#### Over-Representation Analysis using hypergeometric test on DE genes from {genes.name} with collection {he.collection.name}",
                 # )
                 # items.append(pl)
+                items[genes.name][collection_name] = job
         return items

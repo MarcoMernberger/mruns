@@ -14,6 +14,8 @@ import mdataframe
 import mpathways
 import pypipegraph2 as ppg
 import mruns
+import matplotlib
+import matplotlib.pyplot as plt
 from testfixtures import LogCapture
 from mruns.runner import Runner
 from mruns.base import Analysis
@@ -25,6 +27,7 @@ from mdataframe import Filter
 from conftest import mockgenome, MockGenome
 from mruns.modules import VolcanoModule, PCAModule
 
+
 __author__ = "Marco Mernberger"
 __copyright__ = "Marco Mernberger"
 __license__ = "mit"
@@ -33,12 +36,37 @@ __license__ = "mit"
 data_folder = Path(__file__).parent / "data"
 
 
+def make_html(path):
+    with path.open("w") as op:
+        op.write("""
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>title</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="script.js"></script>
+  </head>
+  <body>
+    <!-- page content -->
+  </body>
+</html>
+"""
+                 )
+
 class MockRawLane:
     def __init__(self, sample):
         self.name = sample
 
     def align(self, aligner, genome, aligner_parameters):
         return MockAligned(aligner, genome, aligner_parameters, self.name)
+
+
+def make_plot(name, *args, **kwargs):
+    plt.figure()
+    plt.plot([1, 2, 3])
+    plt.savefig(name)
+    assert name.exists()
 
 
 class MockAligned:
@@ -294,10 +322,10 @@ def test_raw_counter(ana):
     runner.analysis.samples["kit"] = "NextSeq"
     runner.analysis.samples["stranded"] = True
     counter = runner.get_raw_counter_from_kit()
-    assert "genomics.genes.anno_tag_counts.ExonSmartStrandedRust" in str(counter)
-    with pytest.raises(NotImplementedError):
-        runner.analysis.samples["stranded"] = False
-        runner.get_raw_counter_from_kit()
+    assert "genomics.genes.anno_tag_counts.ExonSmartStrandedRust" in str(counter)    
+    runner.analysis.samples["stranded"] = False
+    counter = runner.get_raw_counter_from_kit()
+    assert "mbf.genomics.genes.anno_tag_counts.ExonSmartUnstrandedRust" in str(counter)
     with pytest.raises(NotImplementedError):
         runner.analysis.samples["kit"] = "Unknown"
         runner.analysis.samples["stranded"] = True
@@ -572,7 +600,15 @@ def test_gsea(ana_new):
         runner.prefilter()
         with mock.patch.object(mpathways.gsea.GSEA, "run_on_counts", new=MockGSEA.run_on_counts):
             args_caught = runner.run_gsea()
-            args, kwargs = args_caught[0]
+            for comp_name in [
+                "C_vs_D(A)",
+                "C_vs_D(B)",
+            ]:
+                assert comp_name in args_caught
+                for collection_name in ["h", "c2", "h,c2"]:
+                    assert collection_name in args_caught[comp_name]
+            args, kwargs = args_caught["C_vs_D(A)"]["h,c2"]
+            assert kwargs["collection"] == ["h", "c2"]
             assert args[0] == runner.genes_used
             assert kwargs["phenotypes"] == ["C", "D"]
             samples_expected = (["S1 CPM", "S2 CPM"], ["S3 CPM", "S4 CPM"])
@@ -580,9 +616,7 @@ def test_gsea(ana_new):
             assert kwargs["genome"] == runner.genome
             assert isinstance(kwargs["annotators"][0], MockCounterNorm)
             assert kwargs["phenotypes"] == ["C", "D"]
-            collections = ["h", "c2", ["h", "c2"]]
-            for _, kwargs in args_caught[:3]:
-                assert kwargs["collection"] in collections
+
         ppg.run()
 
 
@@ -693,7 +727,9 @@ def test_pathways(ana_new, tmp_path):
         with gsea_file.open("r") as inp:
             out = inp.read()
             assert "GSEA" in out
-            assert "Genes(Genes_MockGenome_chr_biotypes_thresholds_drop_empty_names)" in out
+            assert (
+                "Genes(Genes_Homo_sapiens_98_chr=canonical_biotypes_CPM1>1_drop_empty_names)" in out
+            )
             assert "comparison_name:C_vs_D(B)" in out
             assert "phenotypes:['C', 'D']" in out
             assert "columns_a_b:(['S5 CPM', 'S6 CPM'], ['S7 CPM', 'S8 CPM'])" in out
@@ -703,8 +739,9 @@ def test_pathways(ana_new, tmp_path):
             assert "permutations:1000" in out
         with gsea_file.open("r") as inp:
             out = inp.read()
-            print(out)
-            assert "Genes(Genes_MockGenome_chr_biotypes_thresholds_drop_empty_names)" in out
+            assert (
+                "Genes(Genes_Homo_sapiens_98_chr=canonical_biotypes_CPM1>1_drop_empty_names)" in out
+            )
 
 
 @pytest.mark.usefixtures("new_pipegraph_no_qc")
@@ -859,24 +896,29 @@ def test_register_pca(ana_new, tmpdir):
 
 @pytest.mark.usefixtures("new_pipegraph_no_qc")
 def test_everything(ana_new, tmp_path):
+    html = tmp_path / "test.html"
+    gsea_job = ppg.FileGeneratingJob(tmp_path / "test.html", make_html)
     del ana_new.comparison["timeseries"]
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         with mock.patch.object(mdataframe.differential, "DESeq2Unpaired", new=return_mock_diff):
             with mock.patch.object(
-                mpathways.gsea.GSEA, "run_on_counts", new=lambda *args, **kwargs: (None, True)
+                mpathways.gsea.GSEA, "run_on_counts", new=lambda *args, **kwargs: (gsea_job, html)
             ):
                 with mock.patch.object(
-                    mpathways.ora.ORAHyper, "run", new=lambda *args, **kwargs: True
+                    mpathways.ora.ORAHyper, "run", new=lambda *args, **kwargs: ppg.FileGeneratingJob(tmp_path / "path.png", make_plot)
                 ):
                     with mock.patch.object(
                         mbf.genomics.delayeddataframe.DelayedDataFrame, "write", new=just_write
                     ):
-                        ppg.new()
-                        runner = Runner(ana_new)
-                        runner.create_raw = return_mocklane_from_row
-                        runner._raw_counter = MockCounterRaw
-                        runner._normalizer = {"CPM": MockCounterNorm}
-                        runner.everything()
-                        ppg.run()
+                        with mock.patch.object(
+                            mreports.htmlmod.GSEAReportPathModifier, "job", new=lambda _, __, deps: deps[0]
+                        ):
+                            ppg.new()
+                            runner = Runner(ana_new)
+                            runner.create_raw = return_mocklane_from_row
+                            runner._raw_counter = MockCounterRaw
+                            runner._normalizer = {"CPM": MockCounterNorm}
+                            runner.everything()
+                            ppg.run()
                         for genes in runner.genes.values():
                             assert (genes.path / f"{genes.genes_name}.tsv").exists()
