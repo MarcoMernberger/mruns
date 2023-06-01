@@ -1,7 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-"""base.py: Contains toml parser and basic data class."""
+"""base.py: Contains toml parser and basic data class.
+Todo: 
+-   Annotate
+-   Add more checks
+-   filetimeinivariants
+"""
 
 from mruns import __version__
 from pathlib import Path
@@ -522,10 +527,18 @@ class Analysis:
         df_samples = pd.read_csv(self.path_to_samples_df, sep="\t")
         return df_samples
 
+    def samples_file_invariant(self):
+        return ppg.FileInvariant(self.path_to_samples_df)
+
     def combination_df(self):
         if self.path_to_combination_df is not None:
             return pd.read_csv(self.path_to_combination_df, sep="\t")
         return None
+
+    def combination_file_invariant(self):
+        if self.path_to_combination_df is not None:
+            return ppg.FileInvariant(self.path_to_samples_df)
+        return []
 
     def assert_required_columns(self, df_samples):
         columns = ["number", "sample", "prefix", "comment", "vid"]
@@ -594,9 +607,22 @@ class Analysis:
                     f"The groups table for {group} does not contain the following required columns {not_present}."
                 )
 
+    def df_gsea(self):
+        if self.pathways["gsea"]["file"] is None:
+            return None
+        return pd.read_csv(self.incoming / self.pathways["gsea"]["file"], sep="\t")
+
+    def df_gsea_fileinvariant(self):
+        if self.pathways["gsea"]["file"] is None:
+            return []
+        return ppg.FileInvariant(self.incoming / self.pathways["gsea"]["file"])
+
+    def gsea_required_columns(self):
+        return ["comparison_name", "phenotypes", "a", "b", "groupby"]
+
     def verify_gsea(self):
         df_gsea = pd.read_csv(self.incoming / self.pathways["gsea"]["file"], sep="\t")
-        required = pd.Index(["a", "b", "comparison_name", "groupby"])
+        required = pd.Index(self.gsea_required_columns())
         missing = required.difference(df_gsea.columns)
         if len(missing) != 0:
             raise ValueError(
@@ -854,7 +880,7 @@ class Analysis:
         """
         pp = PrettyPrinter(indent=4)
         d = vars(self).copy()
-        #del d["jobs"]
+        # del d["jobs"]
         return "Analysis(\n" + pp.pformat(d) + "\n)"
 
     def display_summary(self):
@@ -1003,7 +1029,10 @@ class Analysis:
         collections = ["h"]
         if "collections" in self.pathways[pathway_method]:
             collections = list(self.pathways[pathway_method]["collections"])
-        collections_to_run = [collections] + [collection for collection in collections]
+        if len(collections) == 1:
+            collections_to_run = collections
+        else:
+            collections_to_run = [collections] + [collection for collection in collections]
         return collections_to_run
 
     def get_gsea_parameter(self):

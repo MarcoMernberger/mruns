@@ -934,8 +934,15 @@ class Runner:
             [self.norm[counter][sample].columns[0] for sample in samples_b],
         )
 
+    def get_gsea_parameters_by_row(self, row):
+        return row[row.index.difference(self.analysis.gsea_required_columns())].to_dict()
+
+    def get_gsea_parameter(self, row):
+        parameter = self.analysis.get_gsea_parameter().copy()
+        parameter.update(self.get_gsea_parameters_by_row(row))
+        return parameter
+
     def run_gsea(self):
-        parameter = self.analysis.get_gsea_parameter()
         collections = self.analysis.get_collections_for_runner("gsea")
         counter = self.analysis.pathways["gsea"]["counter"]
         annotators = list(self.norm[counter].values())
@@ -944,8 +951,9 @@ class Runner:
             comparison_name = row["comparison_name"]
             phenotypes = row["phenotypes"].split(",")
             columns_ab = self.get_columns_ab_for_gsea_by_row(row)
+            parameter = self.get_gsea_parameter(row)
             jobs_and_index[comparison_name] = {}
-            for collection in collections:  # collections_ipa + collections_msig:
+            for collection in collections:
                 collection_name = (
                     ",".join(collection) if isinstance(collection, list) else collection
                 )
@@ -957,6 +965,7 @@ class Runner:
                     collection=collection,
                     genome=self.genome,
                     annotators=annotators,
+                    dependencies=[self.analysis.df_gsea_fileinvariant()],
                     **parameter,
                 )
                 jobs_and_index[comparison_name][collection_name] = (job, index_html)
