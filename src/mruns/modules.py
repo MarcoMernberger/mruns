@@ -6,15 +6,17 @@
 import pandas as pd
 import sklearn
 from pathlib import Path
-from typing import Optional, Callable, List, Dict, Tuple, Any, Union
+from typing import Optional, Callable, List, Dict, Any, Union
 from mplots import save_figure
 from pandas import DataFrame
 from abc import ABC, abstractmethod
 from mplots import volcano_plot, volcano_calc
 from .inputs import InputHandler
 from mplots.scatter import generate_dr_plot
+from mplots.heatmaps import generate_heatmap_simple_figure
 from mplots import plot_empty
 from mdataframe.projection import PCA
+from mdataframe.clustering import KMeans
 
 
 __author__ = "Marco Mernberger"
@@ -118,9 +120,26 @@ class Module(ABC):
                 return True
         return False
 
+    def wrap_prepare_input(
+        self, functions: List[Callable], original_function: Optional[Callable] = None
+    ) -> Callable:
+        def new_prepare_input_frame(df: DataFrame):
+            for func in functions:
+                df = func(df)
+            if original_function is not None:
+                df = original_function(df)
+            return df
+
+        return new_prepare_input_frame
+
+    def add_prepare_input_functions(self, functions: List[Callable]):
+        if not hasattr(self, "prepare_input_frame"):
+            self.prepare_input_frame = self.wrap_prepare_input(functions)
+        else:
+            self.prepare_input_frame = self.wrap_prepare_input(functions, self.prepare_input_frame)
+
 
 class VolcanoModule(Module):
-
     required_inputs = ["df"]
     default_threshold = 1
     default_alpha = 0.05
@@ -159,7 +178,7 @@ class VolcanoModule(Module):
         return df[self.columns]
 
     def call(self):
-        parameters = self.parameters
+        parameters = self.parameters.copy()
         title = parameters.pop("title", "Volcano")
         df_plot = volcano_calc(self.df, **parameters)
         f = volcano_plot(df_plot, title=title)
@@ -180,7 +199,6 @@ class VolcanoModule(Module):
 
 
 class PCAModule(Module):
-
     required_inputs = ["df"]
     optional_inputs = ["df_samples"]
 
@@ -216,21 +234,21 @@ class PCAModule(Module):
 
     def call(self):
         if len(self.df) == 0:
-            return plot_empty(), pd.DataFrame()
+            return [plot_empty(), pd.DataFrame()]
         n_components = self.parameters["n_components"]
-        title = self.parameters.pop("title", "PCA (n_components={n_components})")
+        title = self.parameters.pop("title", f"PCA (n_components={n_components})")
         show_names = self.parameters.pop("show_names", True)
         pca = PCA(n_components=n_components)
         df_pca = pca(self.df)
         class_label_column = None
         if hasattr(self, "df_samples"):
             df_pca.index.rename("Sample", inplace=True)
+            class_label_column = self.df_samples.columns[0]
             df_pca = df_pca.join(self.df_samples, how="left")
-            class_label_column = "Group"
         f = generate_dr_plot(
             df_pca, class_label_column=class_label_column, title=title, show_names=show_names
         )
-        return f, df_pca
+        return [f, df_pca]
 
     def create_outputs(self, f, df_plot):
         folder = self.outputs[0].parent
@@ -244,96 +262,72 @@ class PCAModule(Module):
             raise ValueError("PCA Dataframe contains non-float types.")
 
 
-class HeatmapModule:
-    pass
+class HeatmapModule(Module):
+    required_inputs = ["df"]
 
+    def __init__(
+        self,
+        outfile: Path,
+        inputs: Dict[str, Union[Callable, Any]],
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+        **parameters,
+    ):
+        name = str(outfile) if name is None else name
+        super().__init__(name, inputs, description, **parameters)
+        self._outputs = [
+            outfile,
+            outfile.with_suffix(".tsv"),
+            outfile.with_suffix(".pdf"),
+            outfile.with_suffix(".svg"),
+        ]
+        self.verify_inputs()
 
-"""
-Genes
-    - PCA
-    - Distributions
-    - add to report
+    def prepare_input_frame(self, df: DataFrame) -> DataFrame:
+        df = df.astype(float)
+        df.index.rename("Sample", inplace=True)
+        df = df.transform(sklearn.preprocessing.scale, axis="columns")
+        sort = self.parameters.pop("sort", False)
+        if sort:
+            add = self.parameters.pop("add", False)
+            cluster_params = self.parameters.pop("cluster_params", {})
+            kmeans = KMeans(**cluster_params)
+            df = kmeans(
+                df, add=add, sort=sort
+            )  # cluster rows ... this should be a separate module!
+        return df
 
-Genes Differential
-    - PCA
-    - Distributions
-    - Volcano
-    - Heatmap
-    - ORA
+    def prepare_input(self):
+        self.df = self.prepare_input_frame(self.df)
 
-Genes Combinations
-    - PCA
-    - Heatmap
-    - ORA
+    def load(self):
+        "ensure inputs are there"
+        for input_name in self._inputs:
+            self.load_input(input_name)
+        self.check_inputs()
+        if hasattr(self, "prepare_input_frame"):
+            self.prepare_input()
 
-GSEA
-    - html
+    def call(self):
+        if 0 in self.df.shape:
+            return [plot_empty(), pd.DataFrame()]
+        else:
+            parameters = self.parameters.copy()
+            title = parameters.pop("title", "Heatmap (Z-scaled, KMeans)")
+            f = generate_heatmap_simple_figure(
+                self.df,
+                title,
+                **parameters,
+            )
+        return [f, self.df]
 
+    def create_outputs(self, f, df_plot):
+        folder = self.outputs[0].parent
+        filename_stem = self.outputs[0].stem
+        save_figure(f, folder, filename_stem)
+        df_plot.to_csv(self.outputs[1], index=True, sep="\t")
 
-GA --> Wrapper for genes
-
-
-## requirements
-
-Module --> A class that takes inputs, knows it outputs and generates them
-    --> can be plugged into a Job
-    --> can be used to create a snake Module
-
-
---> Generate tables, plots, any output file should be a model
---> needs to be independent of jobs or snake, just the raw functionality
-
-## for the runner right now
-We do analyses with different gene objects at some point
---> Heatmap
---> pCA
---> enrichments
---> Volcano
-
-All these plots need a dataframe to work on as it is. So dataframe massaging occurs before the module.
-Ideally, getting the dataframe is another module.
-
-For genes/pypipegraph objects, we can wrap it in another wrapper class
-    
-GA:
-Wrapper for genes
---> takes care of job generation
---> register_odule
-
-Runner: 
-- we want to keep track of all the genes in one dictionary to avoid all the for loops
-- we want to tag them, to see, what output should be generated for each gene
-- we need to keep track of dependencies?
-register a single module for all genes
-- register_module (class)
---> GA wraps genes
-
-
-example: PCA
-# 3-4 steps
-# 1/2.  select the correct columns from the genes and scale ->
-# 3. calculate PCA --> new df
-# 4. plot
-
-PCAscale(df, columns) -> df_scaled
-PCAcalc(df_scaled) -> df_pca
-PCAplot(df_pca)
-
-mod = PCAplot(PCAcalc(PCAscale(df, columns)))  # 
-self.gr.register_by_tag("filtered", "PCA")  -->
-
-
-what i need:
-GA should know it's genes "relevant" parameters
--> count_columns
--> norm columns
--> if differential: its deseq columns
--> if comparison: its sample names
--> if combined: 
-    both sample names
-    its ancestor columns
-    more differential columns
--> its ancestors?
-
-#
-"""
+    def check_inputs(self):
+        all_foat = all([dtype == float for dtype in self.df.dtypes])
+        if not all_foat:
+            raise ValueError("PCA Dataframe contains non-float types.")

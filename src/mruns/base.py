@@ -141,6 +141,15 @@ class Analysis:
         return self.filepath_from_incoming(filename)
 
     @property
+    def factors(self) -> List[str]:
+        """
+        Returns the factors for the given samples.
+        """
+        if "factors" in self.samples:
+            return list(self.samples["factors"])
+        return None
+
+    @property
     def outpath(self):
         return self._outpath
 
@@ -615,6 +624,7 @@ class Analysis:
     def df_gsea_fileinvariant(self):
         if self.pathways["gsea"]["file"] is None:
             return []
+        print(self.incoming / self.pathways["gsea"]["file"])
         return ppg.FileInvariant(self.incoming / self.pathways["gsea"]["file"])
 
     def gsea_required_columns(self):
@@ -914,24 +924,24 @@ class Analysis:
         if self.post_processor is not None:
             postprocessor_name = self.post_processor().__class__.__name__
         report_header += f"Alignment Postprocessor: {postprocessor_name} \n"
-        report_header += f"Norm counters requested:  \n"
+        report_header += "\nNorm counters requested:  \n"
         for key in self.normalization:
             report_header += f"{key}={self.normalization[key]}  \n"
         report_header += "\n### Samples  \n  \n"
         df_samples = self.sample_df()
         report_header += df_to_markdown_table(df_samples)
-        report_header += "\n\n### Comparisons requested  \n"
+        report_header += "\n### Comparisons requested  \n  \n"
         for group_name in self.comparison:
             report_header += f"Comparison group: '{group_name}' \n"
             report_header += f"DGE method = {self.comparison[group_name]['method']}  \n"
-            report_header += f"Comparison type = {self.comparison[group_name]['type']}  \n"
+            report_header += f"Comparison type = {self.comparison[group_name]['type']}  \n  \n"
             df_in = self.get_comparison_group_table(group_name)  # pd.read_csv(filepath, sep="\t")
-            report_header += df_to_markdown_table(df_in) + "\n"
+            report_header += df_to_markdown_table(df_in)
         report_header += "\n### Genes  \n"
         genes_used_name = self.genes_used_name()
         report_header += f"Genes used: {genes_used_name}  \n"
         if self.has_gene_filter_specified():
-            report_header += f"Genes used for DE analysis are: \n{self.genes_used_description()}"
+            report_header += f"Genes used for DE analysis are \n{self.genes_used_description()}"
         report_header += "\n### Comparisons  \n"
         report_header += "\n### Pathway Analysis  \n"
         for pathway_method in self.pathways:
@@ -947,7 +957,7 @@ class Analysis:
             report_header += f"Parameters: {parameter}  \n"
         combination_df = self.combination_df()
         if combination_df is not None:
-            report_header += "\n### Set operations on comparisons  \n"
+            report_header += "\n### Set operations on comparisons  \n  \n"
             report_header += df_to_markdown_table(combination_df)
         return report_header
 
@@ -994,20 +1004,17 @@ class Analysis:
                 ]
 
     def get_generator(self, operation):
-        def generator_diff(new_name, genes_to_combine):
+        def generator_diff(new_name, genes_to_combine, path):
             return genomics.genes.genes_from.FromDifference(
-                new_name,
-                genes_to_combine[0],
-                genes_to_combine[1],
-                sheet_name="Differences",
+                new_name, genes_to_combine[0], genes_to_combine[1], sheet_name="Differences"
             )
 
-        def generator_intersect(new_name, genes_to_combine):
+        def generator_intersect(new_name, genes_to_combine, path):
             return genomics.genes.genes_from.FromIntersection(
                 new_name, genes_to_combine, sheet_name="Intersections"
             )
 
-        def generator_union(new_name, genes_to_combine):
+        def generator_union(new_name, genes_to_combine, path):
             return genomics.genes.genes_from.FromAny(
                 new_name, genes_to_combine, sheet_name="Unions"
             )
@@ -1019,7 +1026,7 @@ class Analysis:
         elif operation == "union":
             generator = generator_union
         else:
-            raise NotImplementedError(f"Unknown set operation specified: {row['operation']}")
+            raise NotImplementedError(f"Unknown set operation specified: {operation}")
         return generator
 
     def get_fastqs(self):
@@ -1042,7 +1049,7 @@ class Analysis:
         """"""
         pp = PrettyPrinter(indent=4)
         if self.has_gene_filter_specified():
-            desc = "filtered by:  \n"
+            desc = "\nfiltered by:  \n"
             if "chr" in self.genes["filter"]:
                 desc += f"chr = {self.genes['filter']}\n"
             if "biotypes" in self.genes["filter"]:
@@ -1053,6 +1060,7 @@ class Analysis:
                     desc += filter_str + "\n"
         else:
             desc = "unfiltered"
+        return desc
 
     def genes_used_name(self):
         """Get the name for the genes used"""

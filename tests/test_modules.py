@@ -2,25 +2,11 @@
 
 from pathlib import Path
 import pandas as pd
-from mbf import align, genomics
-import mbf
 import pytest
-import mock
-import unittest
-import mreports
-import mdataframe
-import mpathways
-import pypipegraph2 as ppg2
-import mruns
 import numpy as np
-from mruns.runner import Runner
-from mruns.base import Analysis
-from mbf.genomes import EnsemblGenome
-from mock import MagicMock
 from pandas import DataFrame
-from mdataframe.differential import DESeq2Unpaired
-from mdataframe import Filter
-from mruns.modules import Module, InputHandler, VolcanoModule, PCAModule
+from mruns.modules import Module, InputHandler, VolcanoModule, PCAModule, HeatmapModule
+
 
 __author__ = "Marco Mernberger"
 __copyright__ = "Marco Mernberger"
@@ -170,12 +156,12 @@ class Test_PCAModule:
     def data(self):
         return pd.DataFrame(
             {
-                "s1": [2, 1, -9, 0],
-                "s2": [3, 4, 0.4, 0.2],
-                "s3": [-3, 2, 2, 1],
-                "s4": [1, 2, 3, 1],
+                "s1": [2, 1, -9, 0, 1],
+                "s2": [3, 4, 0.4, 0.2, 2],
+                "s3": [-3, 2, 2, 1, 3],
+                "s4": [1, 2, 3, 1, 4],
             },
-            index=["A", "B", "C", "D"],
+            index=["A", "B", "C", "D", "E"],
             dtype=float,
         )
 
@@ -200,7 +186,7 @@ class Test_PCAModule:
         module = PCAModule(outfile, {"df": caller_func_data, "df_samples": caller_func_samples})
         return module
 
-    def test_init(self, tmp_path, data, samples, module):
+    def test_init(self, tmp_path, module):
         outfile = tmp_path / "pca.png"
         assert module.name == str(outfile)
         assert module.outputs == [
@@ -213,21 +199,89 @@ class Test_PCAModule:
         for col in ["n_components"]:
             assert col in module.parameters
 
-    def test_prepare_input(self, data, tmp_path, module):
+    def test_prepare_input(self, module):
         module.load()
         df = module.df
-        np.testing.assert_almost_equal(df.std(axis="columns"), np.ones(len(df)), decimal=0)
-        np.testing.assert_almost_equal(df.mean(axis="columns"), np.zeros(len(df)))
+        print(df.shape)
+        np.testing.assert_almost_equal(df.std(axis="columns"), np.ones(df.shape[0]), decimal=0)
+        np.testing.assert_almost_equal(df.mean(axis="columns"), np.zeros(df.shape[0]))
 
-    def test_outputs(self, data, tmp_path, module):
+    def test_outputs(self, tmp_path, module):
         outfile = tmp_path / "pca.png"
         module.run()
         for outfile in module.outputs:
             assert outfile.exists()
 
-    def test_check_input(self, module, data, tmp_path):
+    def test_check_input(self, module, data):
         data.iloc[(0, 0)] = "wrong"
         module.sources = {"df": lambda: data}
         with pytest.raises(ValueError) as info:
             module.load()
             assert "PCA Dataframe contains non-float types." in str(info)
+
+
+class Test_HeatmapModule:
+    @pytest.fixture
+    def data(self):
+        return pd.DataFrame(
+            {
+                "s1": [2, 5, 6, 1, 2],
+                "s2": [3, 4, 3, 2, 3],
+                "s3": [-3, 2, 2, -4, -3],
+                "s4": [-1, 2, 3, -1, -1],
+            },
+            index=["A", "B", "C", "D", "E"],
+            dtype=float,
+        )
+
+    @pytest.fixture
+    def module(self, data, tmp_path):
+        def caller_func_data():
+            return data
+
+        outfile = tmp_path / "map.png"
+        module = HeatmapModule(
+            outfile,
+            {"df": caller_func_data},
+            add=False,
+            sort=True,
+            cluster_params={"n_clusters": 2},
+        )
+        return module
+
+    def test_init(self, tmp_path, module):
+        outfile = tmp_path / "map.png"
+        assert module.name == str(outfile)
+        assert module.outputs == [
+            outfile,
+            outfile.with_suffix(".tsv"),
+            outfile.with_suffix(".pdf"),
+            outfile.with_suffix(".svg"),
+        ]
+        assert hasattr(module, "parameters")
+        for col in ["add", "sort"]:
+            assert col in module.parameters
+
+    def test_prepare_input(self, module):
+        """assert the data is z scaled"""
+        module.load()
+        df = module.df
+        print(df)
+        np.testing.assert_almost_equal(df.std(axis="columns"), np.ones(df.shape[0]), decimal=0)
+        np.testing.assert_almost_equal(df.mean(axis="columns"), np.zeros(df.shape[0]))
+
+    def test_outputs(self, tmp_path, module):
+        outfile = tmp_path / "map.png"
+        module.run()
+        for outfile in module.outputs:
+            assert outfile.exists()
+        df = pd.read_csv(outfile.with_suffix(".tsv"), sep="\t", index_col=0)
+        assert df.index.name == "Sample"
+        assert df.index.difference(["A", "B", "C", "D", "E"]).empty
+
+    def test_check_input(self, module, data):
+        data.iloc[(0, 0)] = "wrong"
+        module.sources = {"df": lambda: data}
+        with pytest.raises(ValueError) as info:
+            module.load()
+            assert "Heatmap Dataframe contains non-float types." in str(info)

@@ -6,14 +6,14 @@
 import pypipegraph2 as ppg2
 from pandas import DataFrame
 from pathlib import Path
-from typing import Optional, Callable, List, Dict, Tuple, Any, Union
+from typing import Optional, Callable, List, Dict, Any, Union
 from pypipegraph2 import Job
 from mbf.genomics.annotator import Annotator
 from mdataframe import _Transformer
 from copy import deepcopy
 from mbf.genomics.genes import Genes
 from collections import UserDict
-from .modules import Module, VolcanoModule, PCAModule
+from .modules import Module
 
 
 __author__ = "Marco Mernberger"
@@ -25,7 +25,6 @@ class GenesWrapper:
     def __init__(
         self,
         genes: Genes,
-        outpath: Path,
         tags: List[str] = [],
         name: Optional[str] = None,
         description: Optional[str] = None,
@@ -52,7 +51,7 @@ class GenesWrapper:
         self.genes = genes
         self.genes_name = genes.name
         self.name = name if name is not None else f"GW_{self.genes_name}"
-        self.path = Path(outpath)
+        self.path = self.genes.result_dir
         self.__modules: Dict[str, Module] = {}
         self.__dependencies: Dict[str, List[Job]] = {}
         self.__tags = set(tags)
@@ -90,9 +89,35 @@ class GenesWrapper:
         else:
             return self._module_jobs[module_name]
 
+    def get_module_default_dependencies(self, module: Module) -> List[Job]:
+        jobs = [
+            ppg2.ParameterInvariant(f"PI_{module.name}, module.parameters", module.parameters),
+            ppg2.ParameterInvariant(f"PI_{module.name}, module.description", module.description),
+            ppg2.ParameterInvariant(f"PI_{module.name}, module.outputs", module.outputs),
+            ppg2.FunctionInvariant(f"FI_{module.name}, module.run", module.run),
+            ppg2.FunctionInvariant(f"FI_{module.name}, module.call", module.call),
+            ppg2.FunctionInvariant(f"FI_{module.name}, module.__call__", module.__call__),
+            ppg2.FunctionInvariant(f"FI_{module.name}, module.check_inputs", module.check_inputs),
+            ppg2.FunctionInvariant(
+                f"FI_{module.name}, module.create_outputs", module.create_outputs
+            ),
+            ppg2.FunctionInvariant(f"FI_{module.name}, module.load", module.load),
+            ppg2.FunctionInvariant(f"FI_{module.name}, module.load_input", module.load_input),
+            ppg2.FunctionInvariant(f"FI_{module.name}, module.get_input", module.get_input),
+            ppg2.FunctionInvariant(f"FI_{module.name}, module.verify_inputs", module.verify_inputs),
+        ]
+        if hasattr(module, "prepare_input_frame"):
+            jobs.append(
+                ppg2.FunctionInvariant(
+                    f"FI_{module.name}, module.prepare_input_frame", module.prepare_input_frame
+                )
+            )
+        return jobs
+
     def jobify_module(self, module_name: str) -> Job:
         module = self.__modules[module_name]
         dependencies = self.__dependencies[module_name]
+        dependencies.extend(self.get_module_default_dependencies(module))
         outputs = module.outputs
 
         def __write(outputs):
@@ -101,7 +126,7 @@ class GenesWrapper:
         return ppg2.MultiFileGeneratingJob(outputs, __write).depends_on(dependencies)
 
     def jobs(self):
-        jobs = [self.genes.load(), self.genes.write()[0]]
+        jobs = []  # self.genes.load(), self.genes.write()[0]]
         if not hasattr(self, "_module_jobs"):
             self.jobify()
         jobs.extend(list(self._module_jobs.values()))
@@ -111,12 +136,46 @@ class GenesWrapper:
         output_filename = self.path / f"{self.genes.name}.tsv"
         self.genes.write(output_filename, mangler_function)
 
-    def get_df_caller_func(
-        self, columns: Optional[List[str]] = None, rename_columns: Optional[Dict[str, str]] = None
-    ) -> Callable:
+    def get_df_caller_func(self, genes_parameters: Dict[str, Any]) -> Callable:
+        """
+        Returns a caller that loads the genes Dataframe and ensures a certain
+        format.
+
+        This function loads the Dataframe and applies all transormation functions
+        specific for the genes object.
+
+        Parameters
+        ----------
+        genes_parameters : Dict[str, Any]
+            A dictionary with parameters for the genes Dataframe. These may include:
+            columns : Optional[List[str]], optional
+                The columns to show, by default None. None will select all columns.
+            rename_columns : Optional[Dict[str, str]], optional
+                A dictionary with columns names to be renamed, by default None
+            sort_by : Optional[str], optional
+                A column to sort by, by default None
+            ascending : bool, optional
+                Sort ascending or descening, by default False. If sort_by is None,
+                this parameter is ignored.
+
+        Returns
+        -------
+        Callable
+            Caller for the gene Dataframe.
+        """
+        columns = genes_parameters.get("columns", None)
+        rename_columns = genes_parameters.get("rename_columns", None)
+        sort_by = genes_parameters.get("sort_by", None)
+        ascending = genes_parameters.get("ascending", False)
+
         def get_ddf(*args):
             df = self.genes.df
             df = df.set_index("name")
+            for col in df.columns:
+                print(col)
+            if sort_by is not None:
+                print(sort_by, ascending)
+                df = df.sort_values(sort_by, ascending=ascending)
             if columns is not None:
                 df = df[columns]
             if rename_columns is not None:
@@ -132,10 +191,10 @@ class GenesWrapper:
         module_kwargs: Dict[str, Any],
         annotators: List[Annotator] = [],
         dependencies: List[Job] = [],
-        rename_columns: Optional[Dict[str, str]] = None,
+        genes_parameter: Dict[str, Any] = {},
     ):
         module = module_template(*module_args, **module_kwargs)
-        module = self.adapt_module(module, rename_columns)
+        module = self.adapt_module(module, genes_parameter)
         load_job = self.genes.load()
         if isinstance(load_job, Job):
             dependencies = dependencies + [load_job]
@@ -151,18 +210,14 @@ class GenesWrapper:
         self.__modules[module.name] = module
         self.__dependencies[module.name] = dependencies
 
-    def adapt_module(
-        self, module: Module, rename_columns: Optional[Dict[str, str]] = None
-    ) -> Module:
+    def adapt_module(self, module: Module, genes_parameter: Dict[str, Any] = {}) -> Module:
         # set outputs
         module.outputs = self.fix_outputs(module.outputs)
         # set name
         module.name = f"{module.outputs[0].stem}"
         # set inputs
-        module.old_inputs = module.sources.copy()
-        module.sources = self.fix_inputs(module.sources, rename_columns)
-        if rename_columns is not None:
-            module.prepare_input_frame = self.column_rename_function(rename_columns=rename_columns)
+        # module.old_inputs = module.sources.copy()
+        module.sources = self.fix_inputs(module.sources, genes_parameter)
         return module
 
     def fix_outputs(self, outputs: List[Path]) -> List[Path]:
@@ -174,12 +229,10 @@ class GenesWrapper:
         return fixed_path
 
     def fix_inputs(
-        self, sources: Dict[str, Any], rename_columns: Optional[Dict[str, str]] = None
+        self, sources: Dict[str, Any], genes_parameter: Dict[str, Any]
     ) -> Dict[str, Union[Callable, Any, str, Path]]:
-        if "df" in sources:
-            sources["df"] = self.get_df_caller_func(sources["df"], rename_columns)
-        else:
-            sources["df"] = self.get_df_caller_func(None, rename_columns)
+        if "df" in sources and sources["df"] is None:
+            sources["df"] = self.get_df_caller_func(genes_parameter)
         return sources
 
     def column_rename_function(self, rename_columns: Optional[Dict[str, str]]) -> Callable:
@@ -242,9 +295,9 @@ class GenesCollection(UserDict):
         module_template: type[Module],
         module_args: List[Any],
         module_kwargs: Dict[str, Any],
+        genes_parameter: Dict[str, Any],
         annotators: List[Annotator] = [],
         dependencies: List[Job] = [],
-        rename_columns: Optional[Dict[str, str]] = None,
     ):
         for genes_wrapper in self.genes_by_tag(tag):
             genes_wrapper.register_default_module(
@@ -253,7 +306,7 @@ class GenesCollection(UserDict):
                 deepcopy(module_kwargs),
                 annotators=annotators,
                 dependencies=dependencies,
-                rename_columns=rename_columns,
+                genes_parameter=genes_parameter,
             )
 
 

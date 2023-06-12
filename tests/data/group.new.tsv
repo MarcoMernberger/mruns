@@ -1,3 +1,3 @@
-phenoptypes	a	b	comparison_name	groupby	comment
+phenotypes	a	b	comparison_name	groupby	comment
 C,D	condA,condC	condA,condD	C_vs_D(A)	factor1,factor2	some comment
 C,D	condB,condC	condB,condD	C_vs_D(B)	factor1,factor2	some comment

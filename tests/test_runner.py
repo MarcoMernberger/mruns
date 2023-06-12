@@ -7,8 +7,7 @@ from mbf import align, genomics
 import pytest
 import mbf
 import mock
-import os
-import unittest
+import logging
 import mreports
 import mdataframe
 import mpathways
@@ -38,7 +37,8 @@ data_folder = Path(__file__).parent / "data"
 
 def make_html(path):
     with path.open("w") as op:
-        op.write("""
+        op.write(
+            """
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -52,7 +52,8 @@ def make_html(path):
   </body>
 </html>
 """
-                 )
+        )
+
 
 class MockRawLane:
     def __init__(self, sample):
@@ -322,7 +323,7 @@ def test_raw_counter(ana):
     runner.analysis.samples["kit"] = "NextSeq"
     runner.analysis.samples["stranded"] = True
     counter = runner.get_raw_counter_from_kit()
-    assert "genomics.genes.anno_tag_counts.ExonSmartStrandedRust" in str(counter)    
+    assert "genomics.genes.anno_tag_counts.ExonSmartStrandedRust" in str(counter)
     runner.analysis.samples["stranded"] = False
     counter = runner.get_raw_counter_from_kit()
     assert "mbf.genomics.genes.anno_tag_counts.ExonSmartUnstrandedRust" in str(counter)
@@ -590,6 +591,7 @@ def test_gsea(ana_new):
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
         runner = Runner(ana_new)
+        runner.analysis._incoming = Path("data")
         runner.create_raw = return_mocklane_from_row
         runner.create_samples()
         runner.align()
@@ -706,6 +708,8 @@ def test_pathways(ana_new, tmp_path):
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
         runner = Runner(ana_new)
+        runner.analysis._incoming = Path("data")
+        runner.logger.setLevel(logging.DEBUG)
         runner.create_raw = return_mocklane_from_row
         runner.create_samples()
         runner.align()
@@ -905,13 +909,19 @@ def test_everything(ana_new, tmp_path):
                 mpathways.gsea.GSEA, "run_on_counts", new=lambda *args, **kwargs: (gsea_job, html)
             ):
                 with mock.patch.object(
-                    mpathways.ora.ORAHyper, "run", new=lambda *args, **kwargs: ppg.FileGeneratingJob(tmp_path / "path.png", make_plot)
+                    mpathways.ora.ORAHyper,
+                    "run",
+                    new=lambda *args, **kwargs: ppg.FileGeneratingJob(
+                        tmp_path / "path.png", make_plot
+                    ),
                 ):
                     with mock.patch.object(
                         mbf.genomics.delayeddataframe.DelayedDataFrame, "write", new=just_write
                     ):
                         with mock.patch.object(
-                            mreports.htmlmod.GSEAReportPathModifier, "job", new=lambda _, __, deps: deps[0]
+                            mreports.htmlmod.GSEAReportPathModifier,
+                            "job",
+                            new=lambda _, __, deps: deps[0],
                         ):
                             ppg.new()
                             runner = Runner(ana_new)

@@ -118,4 +118,269 @@ class DefaultModuleRegistrator{
     ' - runner knows the transformers used by comparison
 ' combined genes:
     ' - 
-' 
+' """
+' Genes
+'     - PCA
+'     - Distributions
+'     - add to report
+
+' Genes Differential
+'     - PCA
+'     - Distributions
+'     - Volcano
+'     - Heatmap
+'     - ORA
+
+' Genes Combinations
+'     - PCA
+'     - Heatmap
+'     - ORA
+
+' GSEA
+'     - html
+
+
+' GA --> Wrapper for genes
+
+
+' ## requirements
+
+' Module --> A class that takes inputs, knows it outputs and generates them
+'     --> can be plugged into a Job
+'     --> can be used to create a snake Module
+
+
+' --> Generate tables, plots, any output file should be a model
+' --> needs to be independent of jobs or snake, just the raw functionality
+
+' ## for the runner right now
+' We do analyses with different gene objects at some point
+' --> Heatmap
+' --> pCA
+' --> enrichments
+' --> Volcano
+
+' All these plots need a dataframe to work on as it is. So dataframe massaging occurs before the module.
+' Ideally, getting the dataframe is another module.
+
+' For genes/pypipegraph objects, we can wrap it in another wrapper class
+    
+' GA:
+' Wrapper for genes
+' --> takes care of job generation
+' --> register_odule
+
+' Runner: 
+' - we want to keep track of all the genes in one dictionary to avoid all the for loops
+' - we want to tag them, to see, what output should be generated for each gene
+' - we need to keep track of dependencies?
+' register a single module for all genes
+' - register_module (class)
+' --> GA wraps genes
+
+
+' example: PCA
+' # 3-4 steps
+' # 1/2.  select the correct columns from the genes and scale ->
+' # 3. calculate PCA --> new df
+' # 4. plot
+
+' PCAscale(df, columns) -> df_scaled
+' PCAcalc(df_scaled) -> df_pca
+' PCAplot(df_pca)
+
+' mod = PCAplot(PCAcalc(PCAscale(df, columns)))  # 
+' self.gr.register_by_tag("filtered", "PCA")  -->
+
+
+' what i need:
+' GA should know it's genes "relevant" parameters
+' -> count_columns
+' -> norm columns
+' -> if differential: its deseq columns
+' -> if comparison: its sample names
+' -> if combined: 
+'     both sample names
+'     its ancestor columns
+'     more differential columns
+' -> its ancestors?
+
+' #
+' """
+
+
+' in Runner""
+' class GA:  # Interface to ppg
+
+'     def __init__(name: str, genes: Genes, meta: Dict, outpath: str):
+'         self.name = name
+'         self.genes = genes
+'         self.modules = []
+'         self.meta = meta
+'         self._outpath = Path(outpath)
+        
+'     @property
+'     def outpath(self):
+'         return self._outpath
+
+'     def write(self):
+'         pass
+
+'     def write_meta(self):
+'         pass
+
+'     def read_meta(self):
+'         pass
+
+'     def register_module(self, module: Module, dependencies: List[Job]):
+'         self.modules[module.name] = module
+'         self.dependencies[name] = dependencies
+
+'     def call(self):
+'         "create all outputs"
+'         for module in self._modules:
+'             module.run()
+
+'     def jobify(self, module):
+'         outputs = module.outputs()
+
+'         def __write(outputs):
+'             module.run()
+
+'         return ppg2.FileGeneratingJob(outputs, __write).depends_on(self.dependencies[mdule.name])
+
+
+' class Volcano(Module):
+
+'     def __init__(self, inputs: Dict[str, Union[Callable,Any]], dependencies = [], **parameters):
+'         self._dependencies = dependencies
+'         self.parameters = parameters
+'         self.load = load
+'         self._inputs = inputs
+
+'     @property
+'     def inputs(self):
+'         return list(self._inputs.keys())
+
+'     @property
+'     def outputs(self):
+'         pass
+
+'     def get_input(self):
+'         getter = self._inputs[name]
+'         if callable(getter):
+'             return getter()
+'         elif isinstance(getter, Path):
+
+        
+'     def load_input(self, name):
+'         value = self.get_input(name)
+'         setattr(self, name, value)
+
+'     def get_input(self, name):
+'         if self.
+
+'     def load_inputs(self):
+'         "ensure inputs are there"
+'         pass
+
+'     def run(self):
+'         self.load_inputs()
+'         self.call()
+
+
+'     def call(self):
+'         df_plot = volcano_calc(
+'             self.df_edger,
+'             fc_threshold=1,
+'             alpha=0.05,
+'             logFC_column=self.edger.logFC_column,
+'             p_column=self.edger.p_column,
+'             fdr_column=self.edger.fdr_column,
+'         )
+'         # plot volcano
+'         f = volcano_plot(
+'             df_plot,
+'             title=self.comparison_name
+'         )
+'     edger_results[comparison_name] = df_edger
+    
+'     folder = comparison_folder / comparison_name
+
+
+
+
+
+' # def plot_filtered(self):
+' # pass
+' # df_filter = ef(df_master)
+' # df_filter.reset_index().to_csv(
+' #     comp_folder / f"{comparison_name}.tsv", sep="\t", index=False
+' # )
+' # agglo = Agglo()
+' # df_plot = agglo(
+' #     df_filter[tmm_columns].transform(sklearn.preprocessing.scale, axis="columns"), add=False
+' # )
+' # f = plot_tmm_map(
+' #     df_plot,
+' #     xticks={
+' #         "labels": df_plot.columns,
+' #         "ticks": np.arange(df_plot.shape[1]),
+' #         "rotation": 75,
+' #     },
+' #     yticks={"ticks": []},
+' #     figsize=(10, 30),
+' #     aspect="auto",
+' #     cmap="seismic",
+' #     title=f"{comparison_name} TMM",
+' # )
+' # save_figure(f, comp_folder, f"heatmap_{comparison_name}_TMM")
+
+' # def register(self):
+' #     for comparison_group in self.analysis.comparison:
+' #         filter_expressions = self.analysis.deg_filter_expressions(comparison_group)
+' #         # filtered[condition_group][comparison_name] = {}
+' #         for filter_expr in filter_expressions:
+' #             # descf = desc + f"filtered by {filter_expr}\n"
+' #             # header = f"### Comparison {comparison_name} \n{descf}"
+' #             suffix = self.analysis.deg_filter_expression_as_str(filter_expr)
+' #             new_name = "_".join([comparison_name, suffix])
+' #             regulated = comparison_ab.filter(filter_expr, new_name=new_name)
+' #             regulated.write()
+' #             regulated.write(output_filename=f"{regulated.name}.xlsx")
+' #             filtered[condition_group][comparison_name][suffix] = regulated
+' #             defaults.register_genes(
+' #                 header,
+' #                 regulated,
+' #                 norm_sample_columns,
+' #                 condition_group,
+' #                 class_labels_by_group[condition_group],
+' #                 section,
+' #                 [regulated.add_annotator(anno) for anno in list(normalized.values())],
+' #                 {method_name: comparison_ab},
+' #             )
+
+
+
+
+' Genes
+'     - PCA
+'     - Distributions
+'     - add to report
+
+' Genes Differential
+'     - PCA
+'     - Distributions
+'     - Volcano
+'     - Heatmap
+'     - ORA
+
+' Genes Combinations
+'     - PCA
+'     - Heatmap
+'     - ORA
+
+' GSEA
+'     - html
+
+' """

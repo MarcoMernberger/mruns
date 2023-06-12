@@ -24,7 +24,7 @@ from mbf.align import Sample
 from mpathways import GSEA
 from pathlib import Path
 from typing import Optional, Callable, List, Dict, Tuple, Any, Union, Set
-from pandas import DataFrame, Series
+from pandas import Series
 from mbf import align
 from mbf.genomics.genes.anno_tag_counts import _NormalizationAnno, _FastTagCounter
 from pypipegraph2 import Job
@@ -32,8 +32,7 @@ from mbf.genomics.annotator import Annotator
 from mbf.genomics.genes import Genes
 from .base import Analysis
 from mdataframe import Filter, _Transformer
-from mreports import NB
-from mreports import NB, MarkdownItem, HTMLItem, PlotItem, GSEAHTMLItem
+from mreports import NB, MarkdownItem, PlotItem, GSEAHTMLItem
 from .mbf_compliance import (
     # FromTransformerWrapper,
     DifferentialWrapper,
@@ -41,7 +40,7 @@ from .mbf_compliance import (
     GenesWrapper,
 )
 from .defaults import ORA
-from .modules import VolcanoModule, PCAModule
+from .modules import VolcanoModule, PCAModule, HeatmapModule
 
 
 __author__ = "Marco Mernberger"
@@ -54,18 +53,20 @@ class Runner:
         self,
         analysis: Analysis,
         name: str = "DefaultRunner",
-        output_folder: str = "results",
+        output_folder: Optional[str] = None,
         logfile: str = "logs/runner.log",
         log_level: str = "DEBUG",
     ):
         self.analysis = analysis
         self.name = name
-        self._counter_lookup = {}  # column lookup for counter
-        self._counters = {}  # all count annotators by counter key (e.g. raw)
-        self._nice_column_names = {}
-        self.results = Path(output_folder)
-        self.init_tools()
+        self._counter_lookup: Dict[str, Dict[str, str]] = {}  # column lookup for counter
+        self._counters: Dict[str, Annotator] = {}  # all count annotators by counter key (e.g. raw)
+        self.__ora_results: Dict[str, Dict[str, Job]] = {}
+        self.__gsea_results: Dict[str, Dict[str, Tuple[Job, Path]]] = {}
+        self.results = self.analysis.outpath
         self.init_logger(Path(logfile), log_level)
+        self.log_analysis_params()
+        self.init_tools()
 
     def init_logger(self, logfile: Path, log_level: str = "DEBUG"):
         logfile.parent.mkdir(parents=True, exist_ok=True)
@@ -83,32 +84,40 @@ class Runner:
         self.logger = logger
 
     def init_tools(self):
-        "initlaizes the necessary tools to run the analysis"
+        "initializes the necessary tools to run the analysis"
         self.set_aligner()
         self._fastq_processor = self.get_fastq_processor_from_analysis()
-        self._raw_post_processor = self.analysis.post_processor()
+        self.logger.info(f"Fastq processor: {self._fastq_processor.__class__.__name__}")
         self._postprocessor = self.analysis.post_processor()
+        self.logger.info(f"Post processor: {self._postprocessor.__class__.__name__}")
         self._samples = self.analysis.sample_df()
+        self.logger.info(f"Sample file: {self.analysis.path_to_samples_df}")
         self._genome = self._get_genome()
+        self.logger.info(f"Genome: {self._genome.species}, rev. {self._genome.revision}")
         self._genes_all = mbf.genomics.genes.Genes(self._genome)
         self._raw_counter = self.get_raw_counter_from_kit()
+        self.logger.info(f"Raw Counter: {self._raw_counter}")
         self._normalizer = self.get_normalizer()
+        for norm in self._normalizer:
+            self.logger.info(f"Norm Counters: {norm}: {self._normalizer[norm]}")
         self._set_comparison_frames()
         self._set_comparison_name_group_lookup()
         self._set_combinations()
         self._load_gseas()
-        self._genes_collection = GenesCollection(
-            {
-                "genes_all": GenesWrapper(
-                    self._genes_all,
-                    self.results / self._genes_all.name,
-                    ["genes_all"],
-                    description=f"All Genes from {self.genome}",
-                )
-            }
+        genes_all_wrapper = GenesWrapper(
+            self._genes_all,
+            ["genes_all"],
+            description=f"All Genes from {self.genome}",
         )
+        self._genes_collection = GenesCollection({"genes_all": genes_all_wrapper})
+        self.logger.info(f"Master genes table: {genes_all_wrapper.path}")
         self.gsea = GSEA()
         self._init_report()
+
+    def log_analysis_params(self):
+        self.logger.info(f"Analysis: {self.analysis.name}")
+        self.logger.info(self.analysis.summary_markdown())
+        self.logger.info(f"Output path: {self.results}")
 
     def _init_report(self):
         """
@@ -124,6 +133,7 @@ class Runner:
             ppg.FunctionInvariant("FI_ana", self.analysis.summary_markdown),
         ]
         nb = NB(self.analysis.report_name(), dependencies=dependencies)
+        self.logger.info(f"Initialized report: {nb.name}")
         self._report = nb
 
     def _get_genome(self):
@@ -204,7 +214,6 @@ class Runner:
 
     @property
     def report(self):
-        "Collection of all wrapped genes object"
         return self._report
 
     @property
@@ -225,6 +234,7 @@ class Runner:
             infile = self.analysis.filepath_from_incoming(
                 self.analysis.comparison[comparison]["file"]
             )
+            self.logger.info("Loading comparison: %s" % infile)
             comparison_dataframes[comparison] = pd.read_csv(infile, sep="\t")
         return comparison_dataframes
 
@@ -276,6 +286,7 @@ class Runner:
         aligner, params = self.get_aligner_from_analysis()
         self._aligner = aligner
         self._aligner_params = params
+        self.logger.info(f"Using aligner: {self._aligner.__class__.__name__}")
 
     def create_samples(self):
         """
@@ -283,6 +294,7 @@ class Runner:
         """
         # define samples
         raw_lanes = {}
+        self.logger.info("Initializing raw Samples")
         for _, row in self.samples.iterrows():
             sample_name = str(row["sample"])
             raw_lanes[sample_name] = self.create_raw(sample_name, row)
@@ -328,6 +340,7 @@ class Runner:
         if not hasattr(self, "raw_samples"):
             raise ValueError("No raw samples were defined. Call create_samples first.")
         aligned_lanes = {}
+        self.logger.info("Initializing AlignedSamples")
         for sample_name in self.raw_samples:
             aligned_lanes[sample_name] = self.align_lane(self.raw_samples[sample_name])
         self._aligned_samples = aligned_lanes
@@ -368,6 +381,7 @@ class Runner:
         """count all the lanes, must be done after alignment"""
         if not hasattr(self, "aligned_samples"):
             raise ValueError("Please call count after alignment.")
+        self.logger.info("Adding raw counters")
         self.set_raw()
         self._add_raw_to_counters()
         for sample_name in self.raw:
@@ -439,6 +453,7 @@ class Runner:
     def normalize(self):
         if not hasattr(self, "raw"):
             raise ValueError("Normalization called before counting. Please call count() first.")
+        self.logger.info("Adding normalization counters")
         self.set_norm()
         self._init_norm_annotator()
         for norm_key in self.norm:
@@ -518,6 +533,7 @@ class Runner:
 
     def prefilter(self):
         "filter the genes used in downstream analysis"
+        self.logger.info("Filtering genes used for downstream analysis")
         genes_used = self.genes_all
         pre_filter = self.get_genes_prefilter_from_analysis()
         if pre_filter is not None:
@@ -527,12 +543,9 @@ class Runner:
                 pre_filter,
                 annotators=self.get_count_annotators(),
             )
-        decription = "\n".join(
-            f"{self.analysis.genes_used_name()}, {self.analysis.genes_used_description()}"
-        )
+        decription = f"{self.analysis.genes_used_name()} \n{self.analysis.genes_used_description()}"
         genes_wrapped = GenesWrapper(
             genes=genes_used,
-            outpath=Path(f"results/{genes_used.name}"),
             tags=["genes_used"],
             description=decription,
         )
@@ -653,6 +666,7 @@ class Runner:
 
     def deg(self):
         """use genes_used and perform all differential expression analysis. This includes statistics, volcano and heatmap plots."""
+        self.logger.info("Setting up differential expression analysis")
         self._set_differential_transformer()
         # self.differential_annotators = {}
         for comparison_name in self.differential:
@@ -672,7 +686,7 @@ class Runner:
 
     def __create_volcano_module_arguments(
         self, comparison_name: str, **parameters
-    ) -> Tuple[List[Any], Dict[str, Any]]:
+    ) -> Tuple[List[Any], Dict[str, Any], Dict[str, Any]]:
         differential = self.differential[comparison_name]
         module_parameters = {
             "fc_threshold": parameters.pop("fc_threshold", VolcanoModule.default_threshold),
@@ -680,13 +694,16 @@ class Runner:
             "logFC": differential.transformer.logFC,
             "p": differential.transformer.P,
             "fdr": differential.transformer.FDR,
+            "title": f"Volcano {comparison_name}",
         }
         module_parameters.update(parameters)
-        columns = differential.columns
+        genes_parameters = {
+            "columns": differential.columns,
+        }
         outfile = Path(f"{comparison_name}.volcano.png")
-        inputs = {"df": columns}
-        description = f"#### Volcano plot for {comparison_name}"
-        return [outfile, inputs, description], module_parameters
+        inputs = {"df": None}
+        description = f"Volcano plot for {comparison_name}"
+        return [outfile, inputs, description], module_parameters, genes_parameters
 
     def get_counter_columns_to_sample(
         self, samples: List[str], counter_name: str
@@ -697,25 +714,73 @@ class Runner:
 
     def __create_pca_module_arguments(
         self, prefix: str, samples: List[str], counter_name: str
-    ) -> Tuple[List[Any], Dict[str, Any], Optional[Dict[str, str]]]:
+    ) -> Tuple[List[Any], Dict[str, Any], Optional[Dict[str, Any]]]:
         """This is so ugly"""
-        rename = self.get_counter_columns_to_sample(samples, counter_name)
-        columns = list(rename.keys())
-        inputs = {
-            "df": columns,
-            "df_samples": self.samples,
-        }
+        rename_columns = self.get_counter_columns_to_sample(samples, counter_name)
+        genes_parameter = {"columns": list(rename_columns.keys()), "rename_columns": rename_columns}
+        inputs = {"df": None}
+        if self.analysis.factors is not None:
+            df_groups = self.samples.copy()
+            df_groups = df_groups.set_index("sample")
+            df_groups["condition"] = df_groups[self.analysis.factors].apply("_".join, axis=1)
+            inputs["df_samples"] = df_groups[["condition"]]
+        else:
+            inputs["df_samples"] = self.samples
         outfile = Path(f"{prefix}.{counter_name}.pca.png")
-        description = "#### PCA {prefix} using {counter_name} values"
-        return [outfile, inputs, description], {}, rename
+        description = (
+            f"PCA on {prefix} samples using {counter_name} values"  # this is for the report
+        )
+        return (
+            [outfile, inputs, description],
+            {"title": f"PCA {prefix} ({counter_name})"},
+            genes_parameter,
+        )
+
+    def __create_heatmap_module_arguments(
+        self, prefix: str, samples: List[str], counter_name: str, sort_by: Optional[str] = None
+    ) -> Tuple[List[Any], Dict[str, Any], Optional[Dict[str, Any]]]:
+        rename_columns = self.get_counter_columns_to_sample(samples, counter_name)
+        genes_parameter = {
+            "columns": list(rename_columns.keys()),
+            "rename_columns": rename_columns,
+            "sort_by": sort_by,
+        }
+        inputs = {
+            "df": None,
+        }
+        outfile = Path(f"{prefix}.{counter_name}.heatmap.png")
+        description = f"Heatmap on {prefix} samples using {counter_name} values"
+        return (
+            [outfile, inputs, description],
+            {
+                "add": False,
+                "sort": True,
+                "title": f"Heatmap {prefix} ({counter_name})",
+                "show_column_label": True,
+                "show_row_label": True,
+                "cluster_params": {"n_clusters": 2},
+                "sort_by": sort_by,
+            },
+            genes_parameter,
+        )
 
     def register_defaults(self) -> None:
         """register default jobs with the genes"""
+        all_comparisons = list(self.differential.keys())
+        self.register_volcano("genes_used")
         for comparison_name in self.differential:
-            self.register_volcano(comparison_name)
-        self.register_pca("filtered")
+            self.register_volcano(comparison_name, comparison_names=[comparison_name])
+        self.register_pca("genes_used")
+        self.register_pca("filtered", comparisons=all_comparisons)
+        for comparison_name in self.differential:
+            self.register_heatmap(
+                comparison_name,
+                comparisons=[comparison_name],
+                sort_by_comparison=comparison_name,
+            )
         if self.combinations is not None:
-            self.register_pca("combined")
+            self.register_pca("combined", comparisons=all_comparisons)
+            self.register_heatmap("combined", comparisons=all_comparisons)
 
     def register_volcano(
         self, tag: str, comparison_names: Optional[List[str]] = None, **parameters
@@ -723,16 +788,62 @@ class Runner:
         if comparison_names is None:
             comparison_names = list(self.differential.keys())
         for comparison_name in comparison_names:
-            module_args, module_kwargs = self.__create_volcano_module_arguments(comparison_name)
+            module_args, module_kwargs, genes_parameter = self.__create_volcano_module_arguments(
+                comparison_name
+            )
             annotators, dependencies = self.__get_annos_deps_from_differential(comparison_name)
+            self.logger.info(f"Registering volcano plot for tag '{tag}' on {comparison_name}")
             self.genes.register_default_module_for_tag(
                 tag,
                 VolcanoModule,
                 module_args,
                 module_kwargs,
+                genes_parameter=genes_parameter,
                 annotators=annotators,
                 dependencies=dependencies,
             )
+
+    def register_heatmap(
+        self,
+        tag: str,
+        counter: Optional[str] = None,
+        comparisons: Optional[Union[bool, str, List[str]]] = False,
+        sort_by_comparison: Optional[str] = None,
+    ) -> None:
+        counters = self.__get_counters(counter)
+        samples_to_plot = self.__get_samples_for_pca(comparisons)
+        for counter_name in counters:
+            annotators = [annotator for annotator in self.norm[counter_name].values()]
+            for prefix in samples_to_plot:
+                dependencies: List[Job] = []
+                sort_by = None
+                if sort_by_comparison is not None:
+                    annotators_deg, dependencies = self.__get_annos_deps_from_differential(
+                        sort_by_comparison
+                    )
+                    sort_by = self.differential[sort_by_comparison].transformer.logFC
+                    annotators.extend(annotators_deg)
+                    dependencies.extend(dependencies)
+                (
+                    module_args,
+                    module_kwargs,
+                    genes_parameter,
+                ) = self.__create_heatmap_module_arguments(
+                    prefix,
+                    samples_to_plot[prefix],
+                    counter_name,
+                    sort_by=sort_by,
+                )
+                self.logger.info(f"Registering heatmap for tag '{tag}' on {prefix}")
+                self.genes.register_default_module_for_tag(
+                    tag,
+                    HeatmapModule,
+                    module_args,
+                    module_kwargs,
+                    genes_parameter=genes_parameter,
+                    annotators=annotators,
+                    dependencies=dependencies,
+                )
 
     def register_pca(
         self,
@@ -746,17 +857,18 @@ class Runner:
         for counter_name in counters:
             annotators = [annotator for annotator in self.norm[counter_name].values()]
             for prefix in samples_to_plot:
-                module_args, module_kwargs, rename_columns = self.__create_pca_module_arguments(
+                module_args, module_kwargs, genes_parameter = self.__create_pca_module_arguments(
                     prefix, samples_to_plot[prefix], counter_name
                 )
+                self.logger.info(f"Registering PCA for tag '{tag}' on {prefix} counts")
                 self.genes.register_default_module_for_tag(
                     tag,
                     PCAModule,
                     module_args,
                     module_kwargs,
+                    genes_parameter=genes_parameter,
                     annotators=annotators,
                     dependencies=[],
-                    rename_columns=rename_columns,
                 )
 
     def __get_counters(self, counter: Optional[Union[str, List[str]]] = None) -> List[str]:
@@ -786,32 +898,34 @@ class Runner:
         return samples_to_plot
 
     def filter(self):
+        self.logger.info("Filtering DE genes")
         for comparison_name in self.differential:
             comparison_group = self.comparison_name_group_lookup[comparison_name]
             filter_expressions = self.analysis.deg_filter_expressions(comparison_group)
             for filter_expr in filter_expressions:
                 suffix = self.analysis.deg_filter_expression_as_str(filter_expr)
                 new_name = "_".join([comparison_name, suffix])
-                genes_filtered = self.__filter_genes(new_name, comparison_name, filter_expr)
-                path_filtered = self._genes_collection["genes_used"].path / genes_filtered.name
+                path_filtered = self.filtered_path() / new_name
+                genes_filtered = self.__filter_genes(
+                    new_name, comparison_name, filter_expr, path_filtered
+                )
                 description = f"Comparison {comparison_name}, using {self.differential[comparison_name].transformer.name}\n Genes filtered by {suffix}\n"
                 genes_filtered_wrapped = GenesWrapper(
                     genes_filtered,
-                    path_filtered,
                     tags=["filtered", comparison_group, comparison_name, new_name],
                     description=description,
                 )
                 self._genes_collection[new_name] = genes_filtered_wrapped
 
-    def __filter_genes(self, new_name: str, comparison_name: str, filter_expr: List[str]):
+    def __filter_genes(
+        self, new_name: str, comparison_name: str, filter_expr: List[str], path: Path
+    ):
         differential_filter = self.__get_differential_filter(comparison_name, filter_expr)
         annotators = list(self.raw.values()) + [self.differential[comparison_name]]
         for counter_name in self.norm:
             annotators.extend(list(self.norm[counter_name].values()))
         genes_filtered = self.genes_used.filter(
-            new_name,
-            differential_filter,
-            annotators=annotators,
+            new_name, differential_filter, annotators=annotators, result_dir=path
         )
         return genes_filtered
 
@@ -853,12 +967,13 @@ class Runner:
     ) -> Genes:
         genes_wrapped_to_combine = [self.genes[gene_name] for gene_name in genes_names_to_combine]
         generator = self.analysis.get_generator(operation)
-        combined = generator(new_name, [g.genes for g in genes_wrapped_to_combine])
+        combined = generator(
+            new_name, [g.genes for g in genes_wrapped_to_combine], self.combined_path()
+        )
         inherited_tags = self.get_tags_from_parents(genes_wrapped_to_combine)
         description = f"{new_name}, combined using {operation} on:\n{genes_names_to_combine}"
         combined_wrapped = GenesWrapper(
             combined,
-            outpath=self.combined_path() / new_name,
             tags=["combined", new_name] + list(inherited_tags),
             description=description,
         )
@@ -867,6 +982,7 @@ class Runner:
     def generate_combinations(self):
         combined_genes = {}
         if self.combinations is not None:
+            self.logger.info("Performing set combinations of genes")
             for _, row in self.combinations.iterrows():
                 new_name = row["combined_name"]
                 combined_wrapped = self.combine_genes(
@@ -876,15 +992,19 @@ class Runner:
         return combined_genes
 
     def combined_path(self):
-        return self.analysis.outpath / "Genes" / self._genes_used.name / "combined"
+        return self.results / "Genes" / self._genes_used.name / "combined"
 
     def differential_path(self):
-        return self.analysis.outpath / "Genes" / self._genes_used.name / "differential"
+        return self.results / "Genes" / self._genes_used.name / "differential"
+
+    def filtered_path(self):
+        return self.results / "Genes" / self._genes_used.name / "filtered"
 
     def _load_combinations(self):
         df_combinations = None
         if "file" in self.analysis.combination:
             infile = self.analysis.filepath_from_incoming(self.analysis.combination["file"])
+            self.logger.info(f"Loading combinations from {infile}")
             df_combinations = pd.read_csv(infile, sep="\t")
         return df_combinations
 
@@ -906,7 +1026,7 @@ class Runner:
             genes_to_analyze = [self.genes[genes_name] for genes_name in genes_to_select]
         return genes_to_analyze
 
-    def run_ora(self, genes_to_select=None):
+    def run_ora(self, genes_to_select: Optional[List] = None) -> Dict[str, Dict[str, Job]]:
         genes_to_analyze = self.filtered_genes_to_analyze(genes_to_select)
         ora = ORA(self.genes_used, genes_to_analyze, self.analysis)
         return ora.run_ora()
@@ -942,11 +1062,11 @@ class Runner:
         parameter.update(self.get_gsea_parameters_by_row(row))
         return parameter
 
-    def run_gsea(self):
+    def run_gsea(self) -> Dict[str, Dict[str, Tuple[Job, Path]]]:
         collections = self.analysis.get_collections_for_runner("gsea")
         counter = self.analysis.pathways["gsea"]["counter"]
         annotators = list(self.norm[counter].values())
-        jobs_and_index = {}
+        jobs_and_index: Dict[str, Dict[str, Tuple[Job, Path]]] = {}
         for _, row in self.gseas.iterrows():
             comparison_name = row["comparison_name"]
             phenotypes = row["phenotypes"].split(",")
@@ -1008,6 +1128,7 @@ class Runner:
 
     def write_genes(self, mangler_function=None):
         for genes_name in self.genes:
+            self.logger.info(f"Writing genes {genes_name}")
             self.genes[genes_name].write(mangler_function)
 
     def write_genes_by_name(
@@ -1027,6 +1148,7 @@ class Runner:
             gene_wrapper.write(mangler_function)
 
     def generate_report(self):
+        self.logger.info("Generating report")
         self.report.register_item(
             MarkdownItem("Top", self.analysis.summary_markdown(), color=False)
         )
@@ -1051,6 +1173,7 @@ class Runner:
                     text=genes_wrapped.decription,
                 )
                 self.report.register_item(md)
+
                 for module_name in genes_wrapped.modules:
                     module = genes_wrapped.modules[module_name]
                     module_job = genes_wrapped.get_module_job(module_name)
@@ -1085,6 +1208,8 @@ class Runner:
         self.report.register_item(
             MarkdownItem("Bottom", self.analysis.specification(), color=False)
         )
+        self.report.write()
+        self.report.convert()
 
 
 def get_class_from_module(module_name: str, class_to_check: str):
@@ -1092,180 +1217,3 @@ def get_class_from_module(module_name: str, class_to_check: str):
     if not hasattr(module, class_to_check):
         raise ValueError(f"No class {class_to_check} in module {module_name}.")
     return getattr(module, class_to_check)
-
-
-"""
-class GA:  # Interface to ppg
-
-    def __init__(name: str, genes: Genes, meta: Dict, outpath: str):
-        self.name = name
-        self.genes = genes
-        self.modules = []
-        self.meta = meta
-        self._outpath = Path(outpath)
-        
-    @property
-    def outpath(self):
-        return self._outpath
-
-    def write(self):
-        pass
-
-    def write_meta(self):
-        pass
-
-    def read_meta(self):
-        pass
-
-    def register_module(self, module: Module, dependencies: List[Job]):
-        self.modules[module.name] = module
-        self.dependencies[name] = dependencies
-
-    def call(self):
-        "create all outputs"
-        for module in self._modules:
-            module.run()
-
-    def jobify(self, module):
-        outputs = module.outputs()
-
-        def __write(outputs):
-            module.run()
-
-        return ppg2.FileGeneratingJob(outputs, __write).depends_on(self.dependencies[mdule.name])
-
-
-class Volcano(Module):
-
-    def __init__(self, inputs: Dict[str, Union[Callable,Any]], dependencies = [], **parameters):
-        self._dependencies = dependencies
-        self.parameters = parameters
-        self.load = load
-        self._inputs = inputs
-
-    @property
-    def inputs(self):
-        return list(self._inputs.keys())
-
-    @property
-    def outputs(self):
-        pass
-
-    def get_input(self):
-        getter = self._inputs[name]
-        if callable(getter):
-            return getter()
-        elif isinstance(getter, Path):
-
-        
-    def load_input(self, name):
-        value = self.get_input(name)
-        setattr(self, name, value)
-
-    def get_input(self, name):
-        if self.
-
-    def load_inputs(self):
-        "ensure inputs are there"
-        pass
-
-    def run(self):
-        self.load_inputs()
-        self.call()
-
-
-    def call(self):
-        df_plot = volcano_calc(
-            self.df_edger,
-            fc_threshold=1,
-            alpha=0.05,
-            logFC_column=self.edger.logFC_column,
-            p_column=self.edger.p_column,
-            fdr_column=self.edger.fdr_column,
-        )
-        # plot volcano
-        f = volcano_plot(
-            df_plot,
-            title=self.comparison_name
-        )
-    edger_results[comparison_name] = df_edger
-    
-    folder = comparison_folder / comparison_name
-
-
-
-
-
-# def plot_filtered(self):
-# pass
-# df_filter = ef(df_master)
-# df_filter.reset_index().to_csv(
-#     comp_folder / f"{comparison_name}.tsv", sep="\t", index=False
-# )
-# agglo = Agglo()
-# df_plot = agglo(
-#     df_filter[tmm_columns].transform(sklearn.preprocessing.scale, axis="columns"), add=False
-# )
-# f = plot_tmm_map(
-#     df_plot,
-#     xticks={
-#         "labels": df_plot.columns,
-#         "ticks": np.arange(df_plot.shape[1]),
-#         "rotation": 75,
-#     },
-#     yticks={"ticks": []},
-#     figsize=(10, 30),
-#     aspect="auto",
-#     cmap="seismic",
-#     title=f"{comparison_name} TMM",
-# )
-# save_figure(f, comp_folder, f"heatmap_{comparison_name}_TMM")
-
-# def register(self):
-#     for comparison_group in self.analysis.comparison:
-#         filter_expressions = self.analysis.deg_filter_expressions(comparison_group)
-#         # filtered[condition_group][comparison_name] = {}
-#         for filter_expr in filter_expressions:
-#             # descf = desc + f"filtered by {filter_expr}\n"
-#             # header = f"### Comparison {comparison_name} \n{descf}"
-#             suffix = self.analysis.deg_filter_expression_as_str(filter_expr)
-#             new_name = "_".join([comparison_name, suffix])
-#             regulated = comparison_ab.filter(filter_expr, new_name=new_name)
-#             regulated.write()
-#             regulated.write(output_filename=f"{regulated.name}.xlsx")
-#             filtered[condition_group][comparison_name][suffix] = regulated
-#             defaults.register_genes(
-#                 header,
-#                 regulated,
-#                 norm_sample_columns,
-#                 condition_group,
-#                 class_labels_by_group[condition_group],
-#                 section,
-#                 [regulated.add_annotator(anno) for anno in list(normalized.values())],
-#                 {method_name: comparison_ab},
-#             )
-
-
-
-
-Genes
-    - PCA
-    - Distributions
-    - add to report
-
-Genes Differential
-    - PCA
-    - Distributions
-    - Volcano
-    - Heatmap
-    - ORA
-
-Genes Combinations
-    - PCA
-    - Heatmap
-    - ORA
-
-GSEA
-    - html
-
-"""

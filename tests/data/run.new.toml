@@ -24,7 +24,7 @@ CPM = "NormalizationCPM"
 [genes.filter]
 chr = "canonical"
 biotypes = ["protein_coding", "lincRNA"]
-thresholds = [["CPM", "1>", 1]]
+thresholds = [["CPM", "1>", "1"]]
 drop_empty_names = true
 
 
@@ -40,12 +40,12 @@ filter_expressions = [
         [
             "FDR", # attribute_name!
             "<=",  # operator
-            0.05,  # threshold
+            "0.05",  # threshold
         ],
-        ["logFC", "|>", 1],
+        ["logFC", "|>", "1"],
     ],
-    [["FDR", "<=", 0.05], ["logFC", ">=", 1]],
-    [["FDR", "<=", 0.05], ["logFC", "<=", 1]],
+    [["FDR", "<=", "0.05"], ["logFC", ">=", "1"]],
+    [["FDR", "<=", "0.05"], ["logFC", "<=", "1"]],
 ]
 
 # put parameters for the method instantiation here

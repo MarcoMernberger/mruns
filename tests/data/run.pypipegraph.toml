@@ -23,7 +23,7 @@ CPM = "NormalizationCPM"
 [genes.filter]
 chr = "canonical"
 biotypes = ["protein_coding", "lincRNA"]
-thresholds = [["CPM", "1>", 1]]
+thresholds = [["CPM", "1>", "1"]]
 drop_empty_names = true
 
 [comparison]
@@ -113,7 +113,7 @@ file = "combinations.tsv"
 collections = ["c6", "c7", "c2", "c5", "h", "ipa", "ipa_reg"]
 
 [pathways.gsea]
-parameters = [["permutation", 1000]]
+parameters = [["permutation", "1000"]]
 
 collections = ["c6", "c7", "c2", "c5", "h", "ipa"]
 [reports]
