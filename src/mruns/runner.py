@@ -53,7 +53,6 @@ class Runner:
         self,
         analysis: Analysis,
         name: str = "DefaultRunner",
-        output_folder: Optional[str] = None,
         logfile: str = "logs/runner.log",
         log_level: str = "DEBUG",
     ):
@@ -597,10 +596,18 @@ class Runner:
 
     def differential_wrapper_ab(self, row: pd.Series, comparison_group: str) -> DifferentialWrapper:
         """Generates a differential transformer for ab type comparisons."""
+        self.logger.info(f"request comparison: {comparison_group}")
         counter = self.analysis.comparison[comparison_group].get("counter", "raw")
         samples_a, samples_b = self.get_comparison_samples_by_row(row)
+        self.logger.info(
+            f"samples_a for comparison {comparison_group}: {samples_a}",
+        )
+        self.logger.info(
+            f"samples_b for comparison {comparison_group}: {samples_b}",
+        )
         columns_a = [self._counter_lookup[counter][sample] for sample in samples_a]
         columns_b = [self._counter_lookup[counter][sample] for sample in samples_b]
+
         arguments = [columns_a, columns_b, row["comparison_name"]]
         transformer = self.generate_transformer(comparison_group, arguments)
         deg = DifferentialWrapper(

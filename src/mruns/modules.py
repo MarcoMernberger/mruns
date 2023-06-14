@@ -287,14 +287,14 @@ class HeatmapModule(Module):
         df = df.astype(float)
         df.index.rename("Sample", inplace=True)
         df = df.transform(sklearn.preprocessing.scale, axis="columns")
-        sort = self.parameters.pop("sort", False)
-        if sort:
-            add = self.parameters.pop("add", False)
-            cluster_params = self.parameters.pop("cluster_params", {})
-            kmeans = KMeans(**cluster_params)
-            df = kmeans(
-                df, add=add, sort=sort
-            )  # cluster rows ... this should be a separate module!
+        # sort = self.parameters.pop("sort", False) # this should all be in a separate module!
+        # if sort:
+        #     add = self.parameters.pop("add", False)
+        #     cluster_params = self.parameters.pop("cluster_params", {})
+        #     kmeans = KMeans(**cluster_params)
+        #     df = kmeans(
+        #         df, add=add, sort=sort
+        #     )  # cluster rows ... this should be a separate module!
         return df
 
     def prepare_input(self):

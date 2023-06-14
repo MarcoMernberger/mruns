@@ -533,7 +533,7 @@ class Analysis:
         DataFrame
             DataFrame with samples to be analyzed.
         """
-        df_samples = pd.read_csv(self.path_to_samples_df, sep="\t")
+        df_samples = pd.read_csv(self.path_to_samples_df, sep="\t", comment="#")
         return df_samples
 
     def samples_file_invariant(self):

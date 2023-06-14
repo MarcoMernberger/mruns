@@ -173,7 +173,7 @@ def return_mock_diff(*args, **kwargs):
 @pytest.fixture
 def patch_runner(ana):
     ana.alignment["parameters"] = {"myparam": "param"}
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     with mock.patch.object(
         mbf.align.strategies.FASTQsJoin, "__call__", new=lambda *_, **__: "FASTQsJoin"
     ):
@@ -194,7 +194,7 @@ def patch_runner(ana):
 
 
 def test_runner_init(ana):
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     assert runner.analysis == ana
     assert runner.name == "DefaultRunner"
     assert isinstance(runner.fastq_processor, mbf.align.fastq2.UMIExtractAndTrim)
@@ -217,14 +217,14 @@ def test_runner_init(ana):
 
 def test_runner_generate_combinations_none(ana):
     ana.combination = {}
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     assert runner.combinations is None
     combined = runner.generate_combinations()
     assert combined == {}
 
 
 def test_runner_generate_combinations(ana):
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     assert runner.combinations is not None
     with mock.patch.object(runner, "combine_genes", new=lambda *_, **__: "gene"):
         combined = runner.generate_combinations()
@@ -235,7 +235,7 @@ def test_runner_generate_combinations(ana):
 
 @pytest.mark.usefixtures("new_pipegraph_no_qc")
 def test_runner_create_raw(ana_pypipe):
-    runner = Runner(ana_pypipe)
+    runner = Runner(ana_pypipe, log_level=logging.WARNING)
     with mock.patch.object(
         mbf.align.strategies.FASTQsJoin, "__call__", new=lambda *_, **__: "FASTQsJoin"
     ):
@@ -255,7 +255,7 @@ def test_runner_create_raw(ana_pypipe):
 
 
 def test_runner_align(ana, patch_runner):
-    runner_no_samples = Runner(ana)
+    runner_no_samples = Runner(ana, log_level=logging.WARNING)
     with pytest.raises(ValueError) as info:
         runner_no_samples.align()
         assert "No raw samples were defined. Call create_samples first." in str(info)
@@ -278,10 +278,10 @@ def test_runner_align(ana, patch_runner):
 
 
 def test_get_fastq_processor(ana):
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     assert isinstance(runner.fastq_processor, mbf.align.fastq2.UMIExtractAndTrim)
     ana.samples["kit"] = "NextSeq"
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     assert isinstance(runner.fastq_processor, mbf.align.fastq2.Straight)
     with pytest.raises(NotImplementedError):
         ana.samples["kit"] = "None"
@@ -290,12 +290,12 @@ def test_get_fastq_processor(ana):
 
 def test_set_aligner(ana):
     ana.alignment["parameters"] = {"myparam": "param"}
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     assert isinstance(runner.aligner, mbf.externals.aligners.STAR)
     assert "myparam" in runner._aligner_params
     with pytest.raises(ValueError) as info:
         ana.alignment["aligner"] = "Thisisnoaligner"
-        Runner(ana)
+        Runner(ana, log_level=logging.WARNING)
         assert "No aligner" in str(info)
 
 
@@ -306,14 +306,14 @@ def test_genes(ana):
 
 @pytest.mark.usefixtures("new_pipegraph_no_qc")
 def test_runner_pype(ana_pypipe):
-    runner = Runner(ana_pypipe)
+    runner = Runner(ana_pypipe, log_level=logging.WARNING)
     assert isinstance(runner.aligner, mbf.externals.aligners.STAR)
     assert isinstance(runner.fastq_processor, mbf.align.fastq2.Straight)
     assert isinstance(runner.genome, mbf.genomes.ensembl._EnsemblGenome)
 
 
 def test_raw_counter(ana):
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     counter = runner.get_raw_counter_from_kit()
     assert "genomics.genes.anno_tag_counts.ExonSmartStrandedRust" in str(counter)
     runner.analysis.samples["stranded"] = False
@@ -334,7 +334,7 @@ def test_raw_counter(ana):
 
 
 def test_norm_counter(ana):
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     with pytest.raises(NotImplementedError):
         runner.analysis.samples["stranded"] = False
         runner.get_norm_counter_from_kit()
@@ -361,7 +361,7 @@ def just_write(ddf, output_filename=None, mangler_function=None, float_format="%
 def test_run(ana_pypipe, tmpdir):
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_pypipe)
+        runner = Runner(ana_pypipe, log_level=logging.WARNING)
         runner.create_samples()
         runner.raw_samples["sample"].align = MagicMock(side_effect=return_mocklane)
         runner.align()
@@ -385,7 +385,7 @@ def test_run(ana_pypipe, tmpdir):
 def test_write_genes(ana_pypipe, tmpdir):
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_pypipe)
+        runner = Runner(ana_pypipe, log_level=logging.WARNING)
         runner.create_samples()
         runner.raw_samples["sample"].align = MagicMock(side_effect=return_mocklane)
         runner.align()
@@ -408,7 +408,7 @@ def test_run_fail_norm(ana_pypipe):
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
         with pytest.raises(ValueError) as info:
-            runner = Runner(ana_pypipe)
+            runner = Runner(ana_pypipe, log_level=logging.WARNING)
             runner.create_samples()
             runner.align()
             runner.normalize()
@@ -421,7 +421,7 @@ def test_run_fail_count(ana_pypipe):
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
         with pytest.raises(ValueError) as info:
-            runner = Runner(ana_pypipe)
+            runner = Runner(ana_pypipe, log_level=logging.WARNING)
             runner.count()
             ppg.run()
             assert "Please call count after alignment" in str(info)
@@ -429,7 +429,7 @@ def test_run_fail_count(ana_pypipe):
 
 @pytest.mark.usefixtures("new_pipegraph_no_qc")
 def test_set_genome(ana_pypipe):
-    runner = Runner(ana_pypipe)
+    runner = Runner(ana_pypipe, log_level=logging.WARNING)
     assert hasattr(runner, "genome")
     assert runner.genome.species == "Homo_sapiens"
     assert runner.genome.revision == "98"
@@ -446,7 +446,7 @@ def test_set_genome(ana_pypipe):
         {},
         {},
     )
-    runner = Runner(ana2)
+    runner = Runner(ana2, log_level=logging.WARNING)
     assert runner.genome.species == "Mus_musculus"
     assert runner.genome.revision == "98"
     rat = {"species": "Rattus_norvegicus", "revision": 98, "aligner": "STAR"}
@@ -462,7 +462,7 @@ def test_set_genome(ana_pypipe):
         {},
         {},
     )
-    runner = Runner(ana2)
+    runner = Runner(ana2, log_level=logging.WARNING)
     assert runner.genome.species == "Rattus_norvegicus"
     with pytest.raises(ValueError):
         fail = {"species": "Biggusdickus", "revision": 98, "aligner": "STAR"}
@@ -485,7 +485,7 @@ def test_set_genome(ana_pypipe):
 def test_prefilter_run(ana_pypipe, tmpdir):
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_pypipe)
+        runner = Runner(ana_pypipe, log_level=logging.WARNING)
         runner.create_samples()
         runner.raw_samples["sample"].align = MagicMock(side_effect=return_mocklane)
         runner.align()
@@ -510,7 +510,7 @@ def test_prefilter_run(ana_pypipe, tmpdir):
 
 
 def test_get_samples_by_factors(ana):
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     runner._samples = pd.read_csv(data_folder / "samples.new.tsv", sep="\t")
     factors = ["factor1", "factor2"]
     values = ["condB", "condC"]
@@ -522,7 +522,7 @@ def test_get_samples_by_factors(ana):
 def test_get_deg(ana_new, tmpdir):
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_new)
+        runner = Runner(ana_new, log_level=logging.WARNING)
         runner.create_raw = return_mocklane_from_row
         runner.create_samples()
         runner.align()
@@ -579,7 +579,7 @@ def test_get_comparison_samples_by_row(ana):
 
 
 def test_generate_transformer(ana):
-    runner = Runner(ana)
+    runner = Runner(ana, log_level=logging.WARNING)
     diff = runner.generate_transformer("ABpairs", [["sample1"], ["sample2"], "comparison"])
     assert isinstance(diff, DESeq2Unpaired)
     assert diff.columns_a == ["sample1"]
@@ -590,7 +590,7 @@ def test_generate_transformer(ana):
 def test_gsea(ana_new):
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_new)
+        runner = Runner(ana_new, log_level=logging.WARNING)
         runner.analysis._incoming = Path("data")
         runner.create_raw = return_mocklane_from_row
         runner.create_samples()
@@ -627,7 +627,7 @@ def test_filter(ana_new, tmpdir):
     del ana_new.comparison["timeseries"]
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_new)
+        runner = Runner(ana_new, log_level=logging.WARNING)
         runner.create_raw = return_mocklane_from_row
         runner.create_samples()
         runner.align()
@@ -653,7 +653,7 @@ def test_ora(ana_new):
     del ana_new.comparison["timeseries"]
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_new)
+        runner = Runner(ana_new, log_level=logging.WARNING)
         runner.create_raw = return_mocklane_from_row
         runner.create_samples()
         runner.align()
@@ -707,7 +707,7 @@ def test_pathways(ana_new, tmp_path):
 
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_new)
+        runner = Runner(ana_new, log_level=logging.WARNING)
         runner.analysis._incoming = Path("data")
         runner.logger.setLevel(logging.DEBUG)
         runner.create_raw = return_mocklane_from_row
@@ -753,7 +753,7 @@ def test_filtered_genes_to_analyze(ana_new):
     del ana_new.comparison["timeseries"]
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_new)
+        runner = Runner(ana_new, log_level=logging.WARNING)
         runner.create_raw = return_mocklane_from_row
         runner.create_samples()
         runner.align()
@@ -787,7 +787,7 @@ def test_write_filtered(ana_new):
     del ana_new.comparison["timeseries"]
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_new)
+        runner = Runner(ana_new, log_level=logging.WARNING)
         runner.create_raw = return_mocklane_from_row
         runner.create_samples()
         runner.align()
@@ -827,7 +827,7 @@ def test_register_volcano(ana_new, tmpdir):
     del ana_new.comparison["timeseries"]
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_new)
+        runner = Runner(ana_new, log_level=logging.WARNING)
         runner.create_raw = return_mocklane_from_row
         runner.create_samples()
         runner.align()
@@ -868,7 +868,7 @@ def test_register_pca(ana_new, tmpdir):
 
     with mock.patch.object(Runner, "_get_genome", new=MagicMock(return_value=MockGenome())):
         ppg.new()
-        runner = Runner(ana_new)
+        runner = Runner(ana_new, log_level=logging.WARNING)
         runner.create_raw = return_mocklane_from_row
         runner.create_samples()
         runner.align()
@@ -924,7 +924,7 @@ def test_everything(ana_new, tmp_path):
                             new=lambda _, __, deps: deps[0],
                         ):
                             ppg.new()
-                            runner = Runner(ana_new)
+                            runner = Runner(ana_new, log_level=logging.WARNING)
                             runner.create_raw = return_mocklane_from_row
                             runner._raw_counter = MockCounterRaw
                             runner._normalizer = {"CPM": MockCounterNorm}
