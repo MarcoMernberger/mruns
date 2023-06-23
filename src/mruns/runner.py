@@ -1198,7 +1198,7 @@ class Runner:
                     for collection in self.__ora_results[genes_name]:
                         pl = PlotItem(
                             section=tag,
-                            job=self.__ora_results[genes_name][collection],
+                            job=self.__ora_results[genes_name][collection][0],
                             text=f"#### Over-Representation Analysis using hypergeometric test on DE genes from {genes_name} with collection {collection}",
                         )
                         self.report.register_item(pl)

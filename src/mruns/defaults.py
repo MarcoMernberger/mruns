@@ -393,6 +393,7 @@ class ORA:
             for he in self.get_oras():
                 collection_name = he.collection.name
                 job = he.run(genes)
+                plotjob = he.plot_bars(job)
                 # plotjobs = he.plot_bars(job).plot
                 # pl = PlotItem(
                 #     self.genes_parameters[genes.name]["section"],
@@ -400,5 +401,5 @@ class ORA:
                 #     f"#### Over-Representation Analysis using hypergeometric test on DE genes from {genes.name} with collection {he.collection.name}",
                 # )
                 # items.append(pl)
-                items[genes.name][collection_name] = job
+                items[genes.name][collection_name] = (plotjob, job)
         return items
