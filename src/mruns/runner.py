@@ -615,15 +615,16 @@ class Runner:
         }
         arguments = [row["a"], row["b"], condition_to_columns, row["comparison_name"]]
         transformer = self.generate_transformer(comparison_group, arguments)
-        print(transformer.name)
-        #columns_a + columns_b
+        input_columns = columns_a + columns_b
+        if transformer.name == "NOISeq":
+            input_columns += ["chr", "start", "stop", "biotype"]
         deg = DifferentialWrapper(
             name=f"{row['comparison_name']}({comparison_group})",
             comparison_group=comparison_group,
             transformer=transformer,
             counter=counter,
             samples=samples_a + samples_b,
-            input_columns=columns_a + columns_b,
+            input_columns=input_columns,
             dependencies=[],
             annotators=list(self.counters[counter].values()),
         )
