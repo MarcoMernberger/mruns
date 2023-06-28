@@ -613,8 +613,10 @@ class Runner:
             row["b"]: columns_b,
             "other": columns_other
         }
-        arguments = [columns_a, columns_b, condition_to_columns, row["comparison_name"]]
+        arguments = [row["a"], row["b"], condition_to_columns, row["comparison_name"]]
         transformer = self.generate_transformer(comparison_group, arguments)
+        print(transformer.name)
+        #columns_a + columns_b
         deg = DifferentialWrapper(
             name=f"{row['comparison_name']}({comparison_group})",
             comparison_group=comparison_group,
