@@ -136,7 +136,7 @@ class GenesWrapper:
         output_filename = self.path / f"{self.genes.name}.tsv"
         self.genes.write(output_filename, mangler_function)
 
-    def get_df_caller_func(self, genes_parameters: Dict[str, Any]) -> Callable:
+    def get_df_caller_func(self, genes_parameters: Dict[str, Any] = {}) -> Callable:
         """
         Returns a caller that loads the genes Dataframe and ensures a certain
         format.

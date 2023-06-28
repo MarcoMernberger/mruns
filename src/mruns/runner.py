@@ -70,10 +70,10 @@ class Runner:
     def init_logger(self, logfile: Path, log_level: str = "DEBUG"):
         logfile.parent.mkdir(parents=True, exist_ok=True)
         logger = logging.getLogger()
-        logger.setLevel(getattr(logging, log_level))
+        logger.setLevel(log_level)
         console_handler = logging.StreamHandler(sys.stdout)
         formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        console_handler.setLevel(getattr(logging, log_level))
+        console_handler.setLevel(log_level)
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
         file_handler = logging.FileHandler(
@@ -607,8 +607,13 @@ class Runner:
         )
         columns_a = [self._counter_lookup[counter][sample] for sample in samples_a]
         columns_b = [self._counter_lookup[counter][sample] for sample in samples_b]
-
-        arguments = [columns_a, columns_b, row["comparison_name"]]
+        columns_other = [self._counter_lookup[counter][sample] for sample in self.samples["sample"] if sample not in samples_a+samples_b]
+        condition_to_columns = {
+            row["a"]: columns_a,
+            row["b"]: columns_b,
+            "other": columns_other
+        }
+        arguments = [columns_a, columns_b, condition_to_columns, row["comparison_name"]]
         transformer = self.generate_transformer(comparison_group, arguments)
         deg = DifferentialWrapper(
             name=f"{row['comparison_name']}({comparison_group})",
