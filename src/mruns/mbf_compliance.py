@@ -398,6 +398,7 @@ class DifferentialWrapper(Annotator):
         self.__dependencies = dependencies
         self.columns = self.transformer.columns
         self.annotators = annotators
+        print(self.columns)
 
     @property
     def dependencies(self):

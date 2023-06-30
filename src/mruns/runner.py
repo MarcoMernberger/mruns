@@ -607,12 +607,12 @@ class Runner:
         )
         columns_a = [self._counter_lookup[counter][sample] for sample in samples_a]
         columns_b = [self._counter_lookup[counter][sample] for sample in samples_b]
-        columns_other = [self._counter_lookup[counter][sample] for sample in self.samples["sample"] if sample not in samples_a+samples_b]
-        condition_to_columns = {
-            row["a"]: columns_a,
-            row["b"]: columns_b,
-            "other": columns_other
-        }
+        columns_other = [
+            self._counter_lookup[counter][sample]
+            for sample in self.samples["sample"]
+            if sample not in samples_a + samples_b
+        ]
+        condition_to_columns = {row["a"]: columns_a, row["b"]: columns_b, "other": columns_other}
         arguments = [row["a"], row["b"], condition_to_columns, row["comparison_name"]]
         transformer = self.generate_transformer(comparison_group, arguments)
         input_columns = columns_a + columns_b
@@ -797,26 +797,32 @@ class Runner:
             self.register_pca("combined", comparisons=all_comparisons)
             self.register_heatmap("combined", comparisons=all_comparisons)
 
+    def volcano_columns_present(transformer: _Transformer) -> bool:
+        return all(hasattr(transformer, col) for col in ["logFC", "P", "FDR"])
+
     def register_volcano(
         self, tag: str, comparison_names: Optional[List[str]] = None, **parameters
     ) -> None:
         if comparison_names is None:
             comparison_names = list(self.differential.keys())
         for comparison_name in comparison_names:
-            module_args, module_kwargs, genes_parameter = self.__create_volcano_module_arguments(
-                comparison_name
-            )
-            annotators, dependencies = self.__get_annos_deps_from_differential(comparison_name)
-            self.logger.info(f"Registering volcano plot for tag '{tag}' on {comparison_name}")
-            self.genes.register_default_module_for_tag(
-                tag,
-                VolcanoModule,
-                module_args,
-                module_kwargs,
-                genes_parameter=genes_parameter,
-                annotators=annotators,
-                dependencies=dependencies,
-            )
+            if self.volcano_columns_present(self.self.differential[comparison_name].transformer):
+                (
+                    module_args,
+                    module_kwargs,
+                    genes_parameter,
+                ) = self.__create_volcano_module_arguments(comparison_name)
+                annotators, dependencies = self.__get_annos_deps_from_differential(comparison_name)
+                self.logger.info(f"Registering volcano plot for tag '{tag}' on {comparison_name}")
+                self.genes.register_default_module_for_tag(
+                    tag,
+                    VolcanoModule,
+                    module_args,
+                    module_kwargs,
+                    genes_parameter=genes_parameter,
+                    annotators=annotators,
+                    dependencies=dependencies,
+                )
 
     def register_heatmap(
         self,
