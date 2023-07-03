@@ -797,8 +797,9 @@ class Runner:
             self.register_pca("combined", comparisons=all_comparisons)
             self.register_heatmap("combined", comparisons=all_comparisons)
 
-    def volcano_columns_present(transformer: _Transformer) -> bool:
-        return all(hasattr(transformer, col) for col in ["logFC", "P", "FDR"])
+    def volcano_columns_present(self, transformer: _Transformer) -> bool:
+        present = all(hasattr(transformer, col) for col in ["logFC", "P", "FDR"])
+        return present
 
     def register_volcano(
         self, tag: str, comparison_names: Optional[List[str]] = None, **parameters
@@ -806,7 +807,7 @@ class Runner:
         if comparison_names is None:
             comparison_names = list(self.differential.keys())
         for comparison_name in comparison_names:
-            if self.volcano_columns_present(self.self.differential[comparison_name].transformer):
+            if self.volcano_columns_present(self.differential[comparison_name].transformer):
                 (
                     module_args,
                     module_kwargs,
