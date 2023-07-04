@@ -738,9 +738,11 @@ class Runner:
             df_groups = self.samples.copy()
             df_groups = df_groups.set_index("sample")
             df_groups["condition"] = df_groups[self.analysis.factors].apply("_".join, axis=1)
-            inputs["df_samples"] = df_groups[["condition"]]
         else:
-            inputs["df_samples"] = self.samples
+            df_groups = self.samples.copy()
+            df_groups["condition"] = df_groups["sample"].values
+            df_groups = df_groups.set_index("sample")
+        inputs["df_samples"] = df_groups[["condition"]]
         outfile = Path(f"{prefix}.{counter_name}.pca.png")
         description = (
             f"PCA on {prefix} samples using {counter_name} values"  # this is for the report
@@ -785,8 +787,8 @@ class Runner:
         self.register_volcano("genes_used")
         for comparison_name in self.differential:
             self.register_volcano(comparison_name, comparison_names=[comparison_name])
+            self.register_pca(comparison_name, comparisons=comparison_name)
         self.register_pca("genes_used")
-        self.register_pca("filtered", comparisons=all_comparisons)
         for comparison_name in self.differential:
             self.register_heatmap(
                 comparison_name,
@@ -882,6 +884,8 @@ class Runner:
                 module_args, module_kwargs, genes_parameter = self.__create_pca_module_arguments(
                     prefix, samples_to_plot[prefix], counter_name
                 )
+                if len(genes_parameter["columns"]) < 3:
+                    continue
                 self.logger.info(f"Registering PCA for tag '{tag}' on {prefix} counts")
                 self.genes.register_default_module_for_tag(
                     tag,

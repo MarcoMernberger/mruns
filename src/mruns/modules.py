@@ -257,8 +257,8 @@ class PCAModule(Module):
         df_plot.to_csv(self.outputs[1], index=False, sep="\t")
 
     def check_inputs(self):
-        all_foat = all([dtype == float for dtype in self.df.dtypes])
-        if not all_foat:
+        all_float = all([dtype == float for dtype in self.df.dtypes])
+        if not all_float:
             raise ValueError("PCA Dataframe contains non-float types.")
 
 

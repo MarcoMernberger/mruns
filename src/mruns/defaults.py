@@ -12,7 +12,6 @@ from mbf.genomics.genes import Genes
 from mbf.genomics.annotator import Annotator
 from pypipegraph import Job
 from mreports import MarkdownItem, PlotItem, HTMLItem, Item
-from mpathways import GSEA, GMTCollection, MSigChipEnsembl, MSigDBCollection, ORAHyper
 from mplots import volcano
 from .base import Analysis
 from .util import assert_uniqueness
