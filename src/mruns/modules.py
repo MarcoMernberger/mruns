@@ -233,9 +233,9 @@ class PCAModule(Module):
         return df
 
     def call(self):
-        if len(self.df) == 0:
-            return [plot_empty(), pd.DataFrame()]
         n_components = self.parameters["n_components"]
+        if (self.df.shape[0] < n_components) or (self.df.shape[1] < 3):
+            return [plot_empty("Too few features or samples"), pd.DataFrame()]
         title = self.parameters.pop("title", f"PCA (n_components={n_components})")
         show_names = self.parameters.pop("show_names", True)
         pca = PCA(n_components=n_components)

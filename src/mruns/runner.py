@@ -71,11 +71,11 @@ class Runner:
         logfile.parent.mkdir(parents=True, exist_ok=True)
         logger = logging.getLogger()
         logger.setLevel(log_level)
-        console_handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        console_handler.setLevel(log_level)
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+        #console_handler = logging.StreamHandler(sys.stdout)
+        #formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        #console_handler.setLevel(log_level)
+        #console_handler.setFormatter(formatter)
+        #logger.addHandler(console_handler)
         file_handler = logging.FileHandler(
             logfile, mode="w", encoding=None, delay=False, errors=None
         )
