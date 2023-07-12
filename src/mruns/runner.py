@@ -70,12 +70,12 @@ class Runner:
     def init_logger(self, logfile: Path, log_level: str = "DEBUG"):
         logfile.parent.mkdir(parents=True, exist_ok=True)
         logger = logging.getLogger()
-        logger.setLevel(getattr(logging, log_level))
-        console_handler = logging.StreamHandler(sys.stdout)
-        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-        console_handler.setLevel(getattr(logging, log_level))
-        console_handler.setFormatter(formatter)
-        logger.addHandler(console_handler)
+        logger.setLevel(log_level)
+        # console_handler = logging.StreamHandler(sys.stdout)
+        # formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        # console_handler.setLevel(log_level)
+        # console_handler.setFormatter(formatter)
+        # logger.addHandler(console_handler)
         file_handler = logging.FileHandler(
             logfile, mode="w", encoding=None, delay=False, errors=None
         )
@@ -607,16 +607,24 @@ class Runner:
         )
         columns_a = [self._counter_lookup[counter][sample] for sample in samples_a]
         columns_b = [self._counter_lookup[counter][sample] for sample in samples_b]
-
-        arguments = [columns_a, columns_b, row["comparison_name"]]
+        columns_other = [
+            self._counter_lookup[counter][sample]
+            for sample in self.samples["sample"]
+            if sample not in samples_a + samples_b
+        ]
+        condition_to_columns = {row["a"]: columns_a, row["b"]: columns_b, "other": columns_other}
+        arguments = [row["a"], row["b"], condition_to_columns, row["comparison_name"]]
         transformer = self.generate_transformer(comparison_group, arguments)
+        input_columns = columns_a + columns_b
+        if transformer.name == "NOISeq":
+            input_columns += ["chr", "start", "stop", "biotype"]
         deg = DifferentialWrapper(
             name=f"{row['comparison_name']}({comparison_group})",
             comparison_group=comparison_group,
             transformer=transformer,
             counter=counter,
             samples=samples_a + samples_b,
-            input_columns=columns_a + columns_b,
+            input_columns=input_columns,
             dependencies=[],
             annotators=list(self.counters[counter].values()),
         )
@@ -730,9 +738,11 @@ class Runner:
             df_groups = self.samples.copy()
             df_groups = df_groups.set_index("sample")
             df_groups["condition"] = df_groups[self.analysis.factors].apply("_".join, axis=1)
-            inputs["df_samples"] = df_groups[["condition"]]
         else:
-            inputs["df_samples"] = self.samples
+            df_groups = self.samples.copy()
+            df_groups["condition"] = df_groups["sample"].values
+            df_groups = df_groups.set_index("sample")
+        inputs["df_samples"] = df_groups[["condition"]]
         outfile = Path(f"{prefix}.{counter_name}.pca.png")
         description = (
             f"PCA on {prefix} samples using {counter_name} values"  # this is for the report
@@ -777,8 +787,8 @@ class Runner:
         self.register_volcano("genes_used")
         for comparison_name in self.differential:
             self.register_volcano(comparison_name, comparison_names=[comparison_name])
+            self.register_pca(comparison_name, comparisons=comparison_name)
         self.register_pca("genes_used")
-        self.register_pca("filtered", comparisons=all_comparisons)
         for comparison_name in self.differential:
             self.register_heatmap(
                 comparison_name,
@@ -789,26 +799,33 @@ class Runner:
             self.register_pca("combined", comparisons=all_comparisons)
             self.register_heatmap("combined", comparisons=all_comparisons)
 
+    def volcano_columns_present(self, transformer: _Transformer) -> bool:
+        present = all(hasattr(transformer, col) for col in ["logFC", "P", "FDR"])
+        return present
+
     def register_volcano(
         self, tag: str, comparison_names: Optional[List[str]] = None, **parameters
     ) -> None:
         if comparison_names is None:
             comparison_names = list(self.differential.keys())
         for comparison_name in comparison_names:
-            module_args, module_kwargs, genes_parameter = self.__create_volcano_module_arguments(
-                comparison_name
-            )
-            annotators, dependencies = self.__get_annos_deps_from_differential(comparison_name)
-            self.logger.info(f"Registering volcano plot for tag '{tag}' on {comparison_name}")
-            self.genes.register_default_module_for_tag(
-                tag,
-                VolcanoModule,
-                module_args,
-                module_kwargs,
-                genes_parameter=genes_parameter,
-                annotators=annotators,
-                dependencies=dependencies,
-            )
+            if self.volcano_columns_present(self.differential[comparison_name].transformer):
+                (
+                    module_args,
+                    module_kwargs,
+                    genes_parameter,
+                ) = self.__create_volcano_module_arguments(comparison_name)
+                annotators, dependencies = self.__get_annos_deps_from_differential(comparison_name)
+                self.logger.info(f"Registering volcano plot for tag '{tag}' on {comparison_name}")
+                self.genes.register_default_module_for_tag(
+                    tag,
+                    VolcanoModule,
+                    module_args,
+                    module_kwargs,
+                    genes_parameter=genes_parameter,
+                    annotators=annotators,
+                    dependencies=dependencies,
+                )
 
     def register_heatmap(
         self,
@@ -867,6 +884,8 @@ class Runner:
                 module_args, module_kwargs, genes_parameter = self.__create_pca_module_arguments(
                     prefix, samples_to_plot[prefix], counter_name
                 )
+                if len(genes_parameter["columns"]) < 3:
+                    continue
                 self.logger.info(f"Registering PCA for tag '{tag}' on {prefix} counts")
                 self.genes.register_default_module_for_tag(
                     tag,

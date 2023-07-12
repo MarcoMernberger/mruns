@@ -51,9 +51,9 @@ genes = mbf.genomics.genes.Genes(MockGenome())
 
 @pytest.fixture
 def gw(tmp_path):
+    genes.result_dir = tmp_path
     return GenesWrapper(
         genes,
-        tmp_path,
         tags=["main"],
         name="genes_used",
     )
@@ -62,9 +62,9 @@ def gw(tmp_path):
 @pytest.fixture
 def gw2():
     genes2 = genes.filter("genes_filtered", lambda df: df.index)
+    genes2.result_dir = Path("another")
     return GenesWrapper(
         genes2,
-        Path("another"),
         tags=["filtered", "some_other"],
     )
 
@@ -72,9 +72,9 @@ def gw2():
 @pytest.fixture
 def gw3():
     genes3 = genes.filter("genes_filtered2", lambda df: df.index)
+    genes3.result_dir = Path("another")
     return GenesWrapper(
         genes3,
-        Path("another"),
         tags=["filtered"],
     )
 
@@ -119,7 +119,7 @@ class Test_GenesWrapper:
     @pytest.mark.usefixtures("new_pipegraph_no_qc")
     def test_geneswrapper_get_df_caller_func(self, gw):
         columns = ["chr", "tss"]
-        caller = gw.get_df_caller_func(columns=columns)
+        caller = gw.get_df_caller_func({"columns": columns})
         df = caller()
         assert len(df.columns.difference(columns)) == 0
         caller = gw.get_df_caller_func()

@@ -136,7 +136,7 @@ class GenesWrapper:
         output_filename = self.path / f"{self.genes.name}.tsv"
         self.genes.write(output_filename, mangler_function)
 
-    def get_df_caller_func(self, genes_parameters: Dict[str, Any]) -> Callable:
+    def get_df_caller_func(self, genes_parameters: Dict[str, Any] = {}) -> Callable:
         """
         Returns a caller that loads the genes Dataframe and ensures a certain
         format.
@@ -398,6 +398,7 @@ class DifferentialWrapper(Annotator):
         self.__dependencies = dependencies
         self.columns = self.transformer.columns
         self.annotators = annotators
+        print(self.columns)
 
     @property
     def dependencies(self):
@@ -422,6 +423,8 @@ class DifferentialWrapper(Annotator):
         df_in = df_copy[self.input_columns]
         df_transformed = self.transformer(df_in)
         df_transformed = df_transformed.reset_index()
+        key_mapping = dict(zip(ddf.df["gene_stable_id"], ddf.df.index))
+        df_transformed.index = df_transformed["gene_stable_id"].map(key_mapping).values
         df_transformed = df_transformed[self.columns]
         return df_transformed
 
