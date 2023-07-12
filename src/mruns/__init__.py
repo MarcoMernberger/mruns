@@ -14,3 +14,4 @@ finally:
 from .base import analysis
 from .defaults import Defaults
 from .runner import Runner
+from .modules import PCAModule, VolcanoModule, HeatmapModule
