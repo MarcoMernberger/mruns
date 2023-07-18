@@ -254,7 +254,6 @@ class Defaults:
             plotjobs = ml_plot.plot_simple(
                 outfile=Path(genes.result_dir) / f"{genes.name}_hm.png",
             ).plot
-            print(plotjobs)
             pl = PlotItem(
                 self.genes_parameters[genes.name]["section"],
                 plotjobs,

@@ -119,7 +119,7 @@ class GenesWrapper:
         dependencies = self.__dependencies[module_name]
         dependencies.extend(self.get_module_default_dependencies(module))
         outputs = module.outputs
-
+        
         def __write(outputs):
             module.run()
 
@@ -171,10 +171,7 @@ class GenesWrapper:
         def get_ddf(*args):
             df = self.genes.df
             df = df.set_index("name")
-            for col in df.columns:
-                print(col)
             if sort_by is not None:
-                print(sort_by, ascending)
                 df = df.sort_values(sort_by, ascending=ascending)
             if columns is not None:
                 df = df[columns]
@@ -398,7 +395,6 @@ class DifferentialWrapper(Annotator):
         self.__dependencies = dependencies
         self.columns = self.transformer.columns
         self.annotators = annotators
-        print(self.columns)
 
     @property
     def dependencies(self):

@@ -309,8 +309,6 @@ class Analysis:
         seen = set()
         df_in = self.get_comparison_group_table(comparison_group)
         method, options = self.comparison_method(comparison_group, method_name)
-        print(method, type(method))
-        raise ValueError()
         for _, row in df_in.iterrows():
             comparison_name = f"{row['comparison_name']}({method_name})"
             if comparison_name in seen:
@@ -624,7 +622,6 @@ class Analysis:
     def df_gsea_fileinvariant(self):
         if self.pathways["gsea"]["file"] is None:
             return []
-        print(self.incoming / self.pathways["gsea"]["file"])
         return ppg.FileInvariant(self.incoming / self.pathways["gsea"]["file"])
 
     def gsea_required_columns(self):
@@ -826,11 +823,9 @@ class Analysis:
                 "include_other_samples_for_variance", True
             ),
         }
-        print(group_name, method, self.comparison[group_name], method_)
         if "parameters" in self.comparison[group_name]:
             parameters = self.comparison[group_name]["parameters"]
             print("called with parameters")
-            print
             return method_(**parameters), options
         else:
             print("called without parameters")

@@ -510,18 +510,41 @@ class Runner:
                 filter_args.append(self._interpret_threshold_filter(filter_arg))
         if "drop_empty_names" in filter_spec:
             filter_args.append([["name"], "notin", ["", "NaN"]])
-
         custom_filter = Filter(filter_args)
+        return custom_filter
+
+    def generate_comparison_prefilter(self, prefilter: List, row: pd.Series) -> Filter:
+        filter_args_a = []
+        filter_args_b = []
+        for filter_args in prefilter:
+            counter, operator, value = filter_args
+            samples_a, samples_b = self.get_comparison_samples_by_row(row)
+            columns_a = [self._counter_lookup[counter][sample] for sample in samples_a]
+            columns_b = [self._counter_lookup[counter][sample] for sample in samples_b]
+            filter_args_a.append([
+                columns_a,
+                operator,
+                value,
+            ])
+            filter_args_b.append([
+                columns_b,
+                operator,
+                value,
+            ])
+        custom_filter = Filter(filter_args_a)
+        custom_filter |= Filter(filter_args_b)
         return custom_filter
 
     def get_genes_prefilter_from_analysis(self):
         __filter = None
         if self.analysis.has_gene_filter_specified():
             custom_filter = self.generate_custom_filter()
+            __filter = self.get_filter_callable(custom_filter)
+        return __filter
 
-            def __filter(df):
-                return custom_filter(df).index
-
+    def get_filter_callable(self, custom_filter: Filter) -> Callable:
+        def __filter(df):
+            return custom_filter(df).index
         return __filter
 
     def get_count_annotators(self):
@@ -550,6 +573,35 @@ class Runner:
         )
         self._genes_collection["genes_used"] = genes_wrapped
         self._genes_used = genes_used
+        for comparison_group in self.analysis.comparison:
+            df = self.comparison_frames[comparison_group]
+            if "prefilter" in self.analysis.comparison[comparison_group]:
+                prefilter_args = self.analysis.comparison[comparison_group]["prefilter"]
+                for _, row in df.iterrows():
+                    comparison_name = row['comparison_name']
+                    tag = f"genes_used_{comparison_name}"
+                    custom_filter = self.get_filter_callable(
+                        self.generate_comparison_prefilter(prefilter_args, row)
+                        )
+                    genes_used_for_comparison = genes_used.filter(
+                        f"{self.genes_used}_{comparison_name}",
+                        custom_filter,
+                        annotators=self.get_count_annotators(),
+                    )
+                    decription = f"{genes_used_for_comparison} \n filtered by {prefilter_args}"
+                    genes_wrapped_comparison = GenesWrapper(
+                        genes=genes_used_for_comparison,
+                        tags=[tag],
+                        description=decription,
+                    )
+                    self._genes_collection[tag] = genes_wrapped_comparison
+            else:
+                for _, row in df.iterrows():
+                    comparison_name = row['comparison_name']
+                    tag = f"genes_used_{comparison_name}"
+                    genes_wrapped.add_tag(tag)
+                    genes_wrapped_comparison = genes_wrapped
+                    self._genes_collection[tag] = genes_wrapped_comparison
 
     def _set_comparison_name_group_lookup(self):
         self.comparison_name_group_lookup = {}
@@ -687,7 +739,10 @@ class Runner:
         for comparison_name in self.differential:
             differential = self.differential[comparison_name]
             # annotator = FromTransformerWrapper(differential)
-            self.genes_used.add_annotator(differential)
+            tag = f"genes_used_{comparison_name}"
+            genes_used_for_comparison = self.genes[tag]
+            genes_used_for_comparison.genes.add_annotator(differential)
+            # self.genes_used.add_annotator(differential)  # add different genes_used here
             # self.differential_annotators[comparison_name] = annotator
 
     def __get_annos_deps_from_differential(
@@ -786,8 +841,10 @@ class Runner:
         all_comparisons = list(self.differential.keys())
         self.register_volcano("genes_used")
         for comparison_name in self.differential:
-            self.register_volcano(comparison_name, comparison_names=[comparison_name])
+            tag = f"genes_used_{comparison_name}"
+            self.register_volcano(tag, comparison_names=[comparison_name])
             self.register_pca(comparison_name, comparisons=comparison_name)
+            self.register_pca(tag, comparisons=comparison_name)
         self.register_pca("genes_used")
         for comparison_name in self.differential:
             self.register_heatmap(
@@ -931,7 +988,7 @@ class Runner:
             for filter_expr in filter_expressions:
                 suffix = self.analysis.deg_filter_expression_as_str(filter_expr)
                 new_name = "_".join([comparison_name, suffix])
-                path_filtered = self.filtered_path() / new_name
+                path_filtered = self.filtered_path(self.genes[f"genes_used_{comparison_name}"].genes) / new_name
                 genes_filtered = self.__filter_genes(
                     new_name, comparison_name, filter_expr, path_filtered
                 )
@@ -950,7 +1007,8 @@ class Runner:
         annotators = list(self.raw.values()) + [self.differential[comparison_name]]
         for counter_name in self.norm:
             annotators.extend(list(self.norm[counter_name].values()))
-        genes_filtered = self.genes_used.filter(
+        genes_used = self.genes[f"genes_used_{comparison_name}"]
+        genes_filtered = genes_used.genes.filter(
             new_name, differential_filter, annotators=annotators, result_dir=path
         )
         return genes_filtered
@@ -1023,8 +1081,8 @@ class Runner:
     def differential_path(self):
         return self.results / "Genes" / self._genes_used.name / "differential"
 
-    def filtered_path(self):
-        return self.results / "Genes" / self._genes_used.name / "filtered"
+    def filtered_path(self, genes_used):
+        return self.results / "Genes" / genes_used.name / "filtered"
 
     def _load_combinations(self):
         df_combinations = None
@@ -1153,9 +1211,9 @@ class Runner:
         self.generate_report()
 
     def write_genes(self, mangler_function=None):
-        for genes_name in self.genes:
-            self.logger.info(f"Writing genes {genes_name}")
-            self.genes[genes_name].write(mangler_function)
+        for genes in set(self.genes.values()):
+            self.logger.info(f"Writing genes {genes.name}")
+            genes.write(mangler_function)
 
     def write_genes_by_name(
         self, genes_name="genes_all", output_filename=None, mangler_function=None
