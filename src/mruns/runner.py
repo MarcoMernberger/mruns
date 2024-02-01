@@ -58,8 +58,12 @@ class Runner:
     ):
         self.analysis = analysis
         self.name = name
-        self._counter_lookup: Dict[str, Dict[str, str]] = {}  # column lookup for counter
-        self._counters: Dict[str, Annotator] = {}  # all count annotators by counter key (e.g. raw)
+        self._counter_lookup: Dict[
+            str, Dict[str, str]
+        ] = {}  # column lookup for counter
+        self._counters: Dict[
+            str, Annotator
+        ] = {}  # all count annotators by counter key (e.g. raw)
         self.__ora_results: Dict[str, Dict[str, Job]] = {}
         self.__gsea_results: Dict[str, Dict[str, Tuple[Job, Path]]] = {}
         self.results = self.analysis.outpath
@@ -92,7 +96,9 @@ class Runner:
         self._samples = self.analysis.sample_df()
         self.logger.info(f"Sample file: {self.analysis.path_to_samples_df}")
         self._genome = self._get_genome()
-        self.logger.info(f"Genome: {self._genome.species}, rev. {self._genome.revision}")
+        self.logger.info(
+            f"Genome: {self._genome.species}, rev. {self._genome.revision}"
+        )
         self._genes_all = mbf.genomics.genes.Genes(self._genome)
         self._raw_counter = self.get_raw_counter_from_kit()
         self.logger.info(f"Raw Counter: {self._raw_counter}")
@@ -136,7 +142,7 @@ class Runner:
         self._report = nb
 
     def _get_genome(self):
-        ppg.new()
+        # ppg.new()
         if self.analysis.alignment["species"] == "Mus_musculus":
             genome = mbf.genomes.Mus_musculus(self.analysis.alignment["revision"])
         elif self.analysis.alignment["species"] == "Homo_sapiens":
@@ -145,7 +151,7 @@ class Runner:
             genome = mbf.genomes.EnsemblGenome(
                 self.analysis.alignment["species"], self.analysis.alignment["revision"]
             )
-        ppg.run()
+        # ppg.run()
         return genome
 
     @property
@@ -250,7 +256,9 @@ class Runner:
         """
         kit = self.analysis.samples["kit"]
         if kit == "QuantSeq":
-            return align.fastq2.UMIExtractAndTrim(umi_length=6, cut_5_prime=4, cut_3_prime=0)
+            return align.fastq2.UMIExtractAndTrim(
+                umi_length=6, cut_5_prime=4, cut_3_prime=0
+            )
         elif kit == "NextSeq":
             return align.fastq2.Straight()
         else:
@@ -323,7 +331,9 @@ class Runner:
             sample_name,
             mbf.align.strategies.FASTQsJoin(
                 [
-                    mbf.align.strategies.FASTQsFromPrefix(self.construct_path_prefix(row, run_id))
+                    mbf.align.strategies.FASTQsFromPrefix(
+                        self.construct_path_prefix(row, run_id)
+                    )
                     for run_id in self.analysis.run_ids
                 ]
             ),
@@ -451,7 +461,9 @@ class Runner:
 
     def normalize(self):
         if not hasattr(self, "raw"):
-            raise ValueError("Normalization called before counting. Please call count() first.")
+            raise ValueError(
+                "Normalization called before counting. Please call count() first."
+            )
         self.logger.info("Adding normalization counters")
         self.set_norm()
         self._init_norm_annotator()
@@ -490,7 +502,7 @@ class Runner:
     def __get_chromosome_filter_arg(self, chromosomes: Union[str, List[str]]):
         filter_arg = ["chr", "in"]
         if chromosomes == "canonical":
-            filter_argument = self._genome.get_true_chromosomes()
+            filter_argument = [str(i) for i in range(1, 24)] + ["X", "Y", "MT"]
         elif isinstance(chromosomes, str):
             filter_argument = [chromosomes]
         elif isinstance(chromosomes, list):
@@ -521,16 +533,20 @@ class Runner:
             samples_a, samples_b = self.get_comparison_samples_by_row(row)
             columns_a = [self._counter_lookup[counter][sample] for sample in samples_a]
             columns_b = [self._counter_lookup[counter][sample] for sample in samples_b]
-            filter_args_a.append([
-                columns_a,
-                operator,
-                value,
-            ])
-            filter_args_b.append([
-                columns_b,
-                operator,
-                value,
-            ])
+            filter_args_a.append(
+                [
+                    columns_a,
+                    operator,
+                    value,
+                ]
+            )
+            filter_args_b.append(
+                [
+                    columns_b,
+                    operator,
+                    value,
+                ]
+            )
         custom_filter = Filter(filter_args_a)
         custom_filter |= Filter(filter_args_b)
         return custom_filter
@@ -545,6 +561,7 @@ class Runner:
     def get_filter_callable(self, custom_filter: Filter) -> Callable:
         def __filter(df):
             return custom_filter(df).index
+
         return __filter
 
     def get_count_annotators(self):
@@ -578,17 +595,19 @@ class Runner:
             if "prefilter" in self.analysis.comparison[comparison_group]:
                 prefilter_args = self.analysis.comparison[comparison_group]["prefilter"]
                 for _, row in df.iterrows():
-                    comparison_name = row['comparison_name']
+                    comparison_name = row["comparison_name"]
                     tag = f"genes_used_{comparison_name}"
                     custom_filter = self.get_filter_callable(
                         self.generate_comparison_prefilter(prefilter_args, row)
-                        )
+                    )
                     genes_used_for_comparison = genes_used.filter(
                         f"{self.genes_used}_{comparison_name}",
                         custom_filter,
                         annotators=self.get_count_annotators(),
                     )
-                    decription = f"{genes_used_for_comparison} \n filtered by {prefilter_args}"
+                    decription = (
+                        f"{genes_used_for_comparison} \n filtered by {prefilter_args}"
+                    )
                     genes_wrapped_comparison = GenesWrapper(
                         genes=genes_used_for_comparison,
                         tags=[tag],
@@ -597,7 +616,7 @@ class Runner:
                     self._genes_collection[tag] = genes_wrapped_comparison
             else:
                 for _, row in df.iterrows():
-                    comparison_name = row['comparison_name']
+                    comparison_name = row["comparison_name"]
                     tag = f"genes_used_{comparison_name}"
                     genes_wrapped.add_tag(tag)
                     genes_wrapped_comparison = genes_wrapped
@@ -610,7 +629,9 @@ class Runner:
             self.comparison_name_group_lookup.update(
                 dict(
                     zip(
-                        self.comparison_frames[comparison_group]["comparison_name"].values,
+                        self.comparison_frames[comparison_group][
+                            "comparison_name"
+                        ].values,
                         [comparison_group] * length,
                     )
                 )
@@ -633,7 +654,9 @@ class Runner:
             raise NotImplementedError(
                 f"Cannot interpret comparison type {self.analysis.comparison[comparison_group]['type']}."
             )
-        return self.get_differential_transformers(comparison_group, differential_wrapper_generator)
+        return self.get_differential_transformers(
+            comparison_group, differential_wrapper_generator
+        )
 
     def get_differential_transformers(
         self, comparison_group: str, differential_wrapper_generator: Callable
@@ -646,7 +669,9 @@ class Runner:
             diff_transformers[row["comparison_name"]] = deg
         return diff_transformers
 
-    def differential_wrapper_ab(self, row: pd.Series, comparison_group: str) -> DifferentialWrapper:
+    def differential_wrapper_ab(
+        self, row: pd.Series, comparison_group: str
+    ) -> DifferentialWrapper:
         """Generates a differential transformer for ab type comparisons."""
         self.logger.info(f"request comparison: {comparison_group}")
         counter = self.analysis.comparison[comparison_group].get("counter", "raw")
@@ -664,7 +689,11 @@ class Runner:
             for sample in self.samples["sample"]
             if sample not in samples_a + samples_b
         ]
-        condition_to_columns = {row["a"]: columns_a, row["b"]: columns_b, "other": columns_other}
+        condition_to_columns = {
+            row["a"]: columns_a,
+            row["b"]: columns_b,
+            "other": columns_other,
+        }
         arguments = [row["a"], row["b"], condition_to_columns, row["comparison_name"]]
         transformer = self.generate_transformer(comparison_group, arguments)
         input_columns = columns_a + columns_b
@@ -727,7 +756,9 @@ class Runner:
         return samples_a, samples_b
 
     def get_samples_by_factors(self, factors, values) -> List[str]:
-        index = self.samples[(self.samples[factors] == values).all(axis="columns")].index
+        index = self.samples[
+            (self.samples[factors] == values).all(axis="columns")
+        ].index
         samples = self.samples.loc[index]["sample"].values
         return samples
 
@@ -759,7 +790,9 @@ class Runner:
     ) -> Tuple[List[Any], Dict[str, Any], Dict[str, Any]]:
         differential = self.differential[comparison_name]
         module_parameters = {
-            "fc_threshold": parameters.pop("fc_threshold", VolcanoModule.default_threshold),
+            "fc_threshold": parameters.pop(
+                "fc_threshold", VolcanoModule.default_threshold
+            ),
             "alpha": parameters.pop("alpha", VolcanoModule.default_alpha),
             "logFC": differential.transformer.logFC,
             "p": differential.transformer.P,
@@ -787,21 +820,24 @@ class Runner:
     ) -> Tuple[List[Any], Dict[str, Any], Optional[Dict[str, Any]]]:
         """This is so ugly"""
         rename_columns = self.get_counter_columns_to_sample(samples, counter_name)
-        genes_parameter = {"columns": list(rename_columns.keys()), "rename_columns": rename_columns}
+        genes_parameter = {
+            "columns": list(rename_columns.keys()),
+            "rename_columns": rename_columns,
+        }
         inputs = {"df": None}
         if self.analysis.factors is not None:
             df_groups = self.samples.copy()
             df_groups = df_groups.set_index("sample")
-            df_groups["condition"] = df_groups[self.analysis.factors].apply("_".join, axis=1)
+            df_groups["condition"] = df_groups[self.analysis.factors].apply(
+                "_".join, axis=1
+            )
         else:
             df_groups = self.samples.copy()
             df_groups["condition"] = df_groups["sample"].values
             df_groups = df_groups.set_index("sample")
         inputs["df_samples"] = df_groups[["condition"]]
         outfile = Path(f"{prefix}.{counter_name}.pca.png")
-        description = (
-            f"PCA on {prefix} samples using {counter_name} values"  # this is for the report
-        )
+        description = f"PCA on {prefix} samples using {counter_name} values"  # this is for the report
         return (
             [outfile, inputs, description],
             {"title": f"PCA {prefix} ({counter_name})"},
@@ -809,7 +845,11 @@ class Runner:
         )
 
     def __create_heatmap_module_arguments(
-        self, prefix: str, samples: List[str], counter_name: str, sort_by: Optional[str] = None
+        self,
+        prefix: str,
+        samples: List[str],
+        counter_name: str,
+        sort_by: Optional[str] = None,
     ) -> Tuple[List[Any], Dict[str, Any], Optional[Dict[str, Any]]]:
         rename_columns = self.get_counter_columns_to_sample(samples, counter_name)
         genes_parameter = {
@@ -828,10 +868,10 @@ class Runner:
                 "add": False,
                 "sort": True,
                 "title": f"Heatmap {prefix} ({counter_name})",
-                "show_column_label": True,
-                "show_row_label": True,
+                # "show_column_label": True,
+                # "show_row_label": True,
                 "cluster_params": {"n_clusters": 2},
-                "sort_by": sort_by,
+                # "sort_by": sort_by,
             },
             genes_parameter,
         )
@@ -866,14 +906,20 @@ class Runner:
         if comparison_names is None:
             comparison_names = list(self.differential.keys())
         for comparison_name in comparison_names:
-            if self.volcano_columns_present(self.differential[comparison_name].transformer):
+            if self.volcano_columns_present(
+                self.differential[comparison_name].transformer
+            ):
                 (
                     module_args,
                     module_kwargs,
                     genes_parameter,
                 ) = self.__create_volcano_module_arguments(comparison_name)
-                annotators, dependencies = self.__get_annos_deps_from_differential(comparison_name)
-                self.logger.info(f"Registering volcano plot for tag '{tag}' on {comparison_name}")
+                annotators, dependencies = self.__get_annos_deps_from_differential(
+                    comparison_name
+                )
+                self.logger.info(
+                    f"Registering volcano plot for tag '{tag}' on {comparison_name}"
+                )
                 self.genes.register_default_module_for_tag(
                     tag,
                     VolcanoModule,
@@ -899,9 +945,10 @@ class Runner:
                 dependencies: List[Job] = []
                 sort_by = None
                 if sort_by_comparison is not None:
-                    annotators_deg, dependencies = self.__get_annos_deps_from_differential(
-                        sort_by_comparison
-                    )
+                    (
+                        annotators_deg,
+                        dependencies,
+                    ) = self.__get_annos_deps_from_differential(sort_by_comparison)
                     sort_by = self.differential[sort_by_comparison].transformer.logFC
                     annotators.extend(annotators_deg)
                     dependencies.extend(dependencies)
@@ -938,7 +985,11 @@ class Runner:
         for counter_name in counters:
             annotators = [annotator for annotator in self.norm[counter_name].values()]
             for prefix in samples_to_plot:
-                module_args, module_kwargs, genes_parameter = self.__create_pca_module_arguments(
+                (
+                    module_args,
+                    module_kwargs,
+                    genes_parameter,
+                ) = self.__create_pca_module_arguments(
                     prefix, samples_to_plot[prefix], counter_name
                 )
                 if len(genes_parameter["columns"]) < 3:
@@ -954,7 +1005,9 @@ class Runner:
                     dependencies=[],
                 )
 
-    def __get_counters(self, counter: Optional[Union[str, List[str]]] = None) -> List[str]:
+    def __get_counters(
+        self, counter: Optional[Union[str, List[str]]] = None
+    ) -> List[str]:
         if counter is None:
             counters = list(self.norm.keys())  # if no name specified, use all
         elif isinstance(counter, list):
@@ -988,7 +1041,12 @@ class Runner:
             for filter_expr in filter_expressions:
                 suffix = self.analysis.deg_filter_expression_as_str(filter_expr)
                 new_name = "_".join([comparison_name, suffix])
-                path_filtered = self.filtered_path(self.genes[f"genes_used_{comparison_name}"].genes) / new_name
+                path_filtered = (
+                    self.filtered_path(
+                        self.genes[f"genes_used_{comparison_name}"].genes
+                    )
+                    / new_name
+                )
                 genes_filtered = self.__filter_genes(
                     new_name, comparison_name, filter_expr, path_filtered
                 )
@@ -1003,7 +1061,9 @@ class Runner:
     def __filter_genes(
         self, new_name: str, comparison_name: str, filter_expr: List[str], path: Path
     ):
-        differential_filter = self.__get_differential_filter(comparison_name, filter_expr)
+        differential_filter = self.__get_differential_filter(
+            comparison_name, filter_expr
+        )
         annotators = list(self.raw.values()) + [self.differential[comparison_name]]
         for counter_name in self.norm:
             annotators.extend(list(self.norm[counter_name].values()))
@@ -1037,7 +1097,9 @@ class Runner:
         combined_genes = self.generate_combinations()
         self._genes_collection.update(combined_genes)
 
-    def get_tags_from_parents(self, genes_wrapped_to_combine: List[GenesWrapper]) -> Set[str]:
+    def get_tags_from_parents(
+        self, genes_wrapped_to_combine: List[GenesWrapper]
+    ) -> Set[str]:
         inherited_tags = set()
         for gw in genes_wrapped_to_combine:
             new_tags = gw.tags.copy()
@@ -1049,13 +1111,17 @@ class Runner:
     def combine_genes(
         self, new_name: str, genes_names_to_combine: List[str], operation: str
     ) -> Genes:
-        genes_wrapped_to_combine = [self.genes[gene_name] for gene_name in genes_names_to_combine]
+        genes_wrapped_to_combine = [
+            self.genes[gene_name] for gene_name in genes_names_to_combine
+        ]
         generator = self.analysis.get_generator(operation)
         combined = generator(
             new_name, [g.genes for g in genes_wrapped_to_combine], self.combined_path()
         )
         inherited_tags = self.get_tags_from_parents(genes_wrapped_to_combine)
-        description = f"{new_name}, combined using {operation} on:\n{genes_names_to_combine}"
+        description = (
+            f"{new_name}, combined using {operation} on:\n{genes_names_to_combine}"
+        )
         combined_wrapped = GenesWrapper(
             combined,
             tags=["combined", new_name] + list(inherited_tags),
@@ -1087,7 +1153,9 @@ class Runner:
     def _load_combinations(self):
         df_combinations = None
         if "file" in self.analysis.combination:
-            infile = self.analysis.filepath_from_incoming(self.analysis.combination["file"])
+            infile = self.analysis.filepath_from_incoming(
+                self.analysis.combination["file"]
+            )
             self.logger.info(f"Loading combinations from {infile}")
             df_combinations = pd.read_csv(infile, sep="\t")
         return df_combinations
@@ -1097,7 +1165,9 @@ class Runner:
 
     def filtered_genes_to_analyze(self, genes_to_select=None) -> Dict:
         if "filtered" not in self.genes.tags:
-            raise ValueError("No filtered genes to perform ORA on. call filter() first.")
+            raise ValueError(
+                "No filtered genes to perform ORA on. call filter() first."
+            )
         if "combined" not in self.genes.tags:
             self.logger.warn(
                 "No set combinations to perform on. ORA is performed for filtered genes only."
@@ -1107,17 +1177,23 @@ class Runner:
             if "combined" in self.genes.tags:
                 genes_to_analyze += self.genes.genes_by_tag("combined")
         else:
-            genes_to_analyze = [self.genes[genes_name] for genes_name in genes_to_select]
+            genes_to_analyze = [
+                self.genes[genes_name] for genes_name in genes_to_select
+            ]
         return genes_to_analyze
 
-    def run_ora(self, genes_to_select: Optional[List] = None) -> Dict[str, Dict[str, Job]]:
+    def run_ora(
+        self, genes_to_select: Optional[List] = None
+    ) -> Dict[str, Dict[str, Job]]:
         genes_to_analyze = self.filtered_genes_to_analyze(genes_to_select)
         ora = ORA(self.genes_used, genes_to_analyze, self.analysis)
         return ora.run_ora()
 
     def _load_gseas(self):
         if "file" in self.analysis.pathways["gsea"]:
-            infile = self.analysis.filepath_from_incoming(self.analysis.pathways["gsea"]["file"])
+            infile = self.analysis.filepath_from_incoming(
+                self.analysis.pathways["gsea"]["file"]
+            )
             self._gseas = pd.read_csv(infile, sep="\t")
         else:
             self._gseas = None
@@ -1139,7 +1215,9 @@ class Runner:
         )
 
     def get_gsea_parameters_by_row(self, row):
-        return row[row.index.difference(self.analysis.gsea_required_columns())].to_dict()
+        return row[
+            row.index.difference(self.analysis.gsea_required_columns())
+        ].to_dict()
 
     def get_gsea_parameter(self, row):
         parameter = self.analysis.get_gsea_parameter().copy()

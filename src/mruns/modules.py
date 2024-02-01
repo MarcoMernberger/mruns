@@ -13,7 +13,7 @@ from abc import ABC, abstractmethod
 from mplots import volcano_plot, volcano_calc
 from .inputs import InputHandler
 from mplots.scatter import generate_dr_plot
-from mplots.heatmaps import generate_heatmap_simple_figure
+from mplots.heatmaps import generate_heatmap_simple_figure, heatmap_simple
 from mplots import plot_empty
 from mdataframe.projection import PCA
 from mdataframe.clustering import KMeans
@@ -136,7 +136,9 @@ class Module(ABC):
         if not hasattr(self, "prepare_input_frame"):
             self.prepare_input_frame = self.wrap_prepare_input(functions)
         else:
-            self.prepare_input_frame = self.wrap_prepare_input(functions, self.prepare_input_frame)
+            self.prepare_input_frame = self.wrap_prepare_input(
+                functions, self.prepare_input_frame
+            )
 
 
 class VolcanoModule(Module):
@@ -162,7 +164,11 @@ class VolcanoModule(Module):
         ]
         self.verify_inputs()
         self.set_default_parameters_parameters()
-        self.columns = [self.parameters["logFC"], self.parameters["p"], self.parameters["fdr"]]
+        self.columns = [
+            self.parameters["logFC"],
+            self.parameters["p"],
+            self.parameters["fdr"],
+        ]
 
     def set_default_parameters_parameters(self):
         default_parameters = {
@@ -246,7 +252,10 @@ class PCAModule(Module):
             class_label_column = self.df_samples.columns[0]
             df_pca = df_pca.join(self.df_samples, how="left")
         f = generate_dr_plot(
-            df_pca, class_label_column=class_label_column, title=title, show_names=show_names
+            df_pca,
+            class_label_column=class_label_column,
+            title=title,
+            show_names=show_names,
         )
         return [f, df_pca]
 
@@ -287,14 +296,16 @@ class HeatmapModule(Module):
         df = df.astype(float)
         df.index.rename("Sample", inplace=True)
         df = df.transform(sklearn.preprocessing.scale, axis="columns")
-        # sort = self.parameters.pop("sort", False) # this should all be in a separate module!
-        # if sort:
-        #     add = self.parameters.pop("add", False)
-        #     cluster_params = self.parameters.pop("cluster_params", {})
-        #     kmeans = KMeans(**cluster_params)
-        #     df = kmeans(
-        #         df, add=add, sort=sort
-        #     )  # cluster rows ... this should be a separate module!
+        sort = self.parameters.pop(
+            "sort", False
+        )  # this should all be in a separate module!
+        if sort:
+            add = self.parameters.pop("add", False)
+            cluster_params = self.parameters.pop("cluster_params", {})
+            kmeans = KMeans(**cluster_params)
+            df = kmeans(
+                df, add=add, sort=sort
+            )  # cluster rows ... this should be a separate module!
         return df
 
     def prepare_input(self):
@@ -314,11 +325,22 @@ class HeatmapModule(Module):
         else:
             parameters = self.parameters.copy()
             title = parameters.pop("title", "Heatmap (Z-scaled, KMeans)")
-            f = generate_heatmap_simple_figure(
-                self.df,
-                title,
-                **parameters,
-            )
+            # f = generate_heatmap_simple_figure(
+            print(parameters)
+            if self.df.shape[0] <= 400:
+                f = heatmap_simple(
+                    self.df,
+                    figsize=(self.df.shape[1], self.df.shape[0] / 4),
+                    title=title,
+                    **parameters,
+                )
+            else:
+                f = heatmap_simple(
+                    pd.concat([self.df.head(200), self.df.tail(200)]),
+                    figsize=(self.df.shape[1], 100),
+                    title=f"{title} (trunc.)",
+                    **parameters,
+                )
         return [f, self.df]
 
     def create_outputs(self, f, df_plot):
